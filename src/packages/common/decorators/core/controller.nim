@@ -1,4 +1,4 @@
-import macros, asynchttpserver, asyncdispatch, tables, jsony
+import macros, asynchttpserver, asyncdispatch, tables, jsony, options
 
 type RouteHandler = proc (req: Request): Future[void] {.async, gcsafe.}
 
@@ -9,21 +9,47 @@ macro Controller*(name: static[string], body: untyped): untyped =
   result = quote do:
     block: `body`
 
-proc json*(
+proc        Ok*(req: Request, content: auto): Future[void] {.async.} = await req.send(Http200, content)
+proc       Bad*(req: Request, content: auto): Future[void] {.async.} = await req.send(Http400, content)
+proc Forbidden*(req: Request, content: auto): Future[void] {.async.} = await req.send(Http403, content)
+
+proc send*(
   req:     Request,
   code:    HttpCode,
   content: auto,
-  headers: HttpHeaders = newHttpHeaders()
+  headers: HttpHeaders = newHttpHeaders(),
 ): Future[void] {.async.} =
-  headers["Content-Type"] = "application/json"
   await req.respond(
     code,
-    when  content is string: content
-    elif  content is SomeInteger or content is SomeFloat: $content
-    elif  compiles(toJson(content)): toJson(content)
-    else: toJson(content),
+    content.withHeaders(headers),
     headers
   )
+
+proc withHeaders*(content: auto, headers: HttpHeaders): auto =
+  when content is Option:
+    if content.isNone:
+      headers["Content-Type"] = "application/json"
+      return "null"
+    else:
+      return content.get.withHeaders(headers)
+  when content is string:
+    headers["Content-Type"] = "text/html; charset=utf-8"
+    content
+  elif content is SomeInteger or content is SomeFloat:
+    headers["Content-Type"] = "text/plain"
+    $content
+  elif content is bool:
+    headers["Content-Type"] = "text/plain"
+    if content: "true" else: "false"
+  elif content is seq[byte]:
+    headers["Content-Type"] = "application/octet-stream"
+    content.toOpenArrayByte.toString
+  elif content is seq or content is object or compiles(toJson(content)):
+    headers["Content-Type"] = "application/json"
+    toJson(content)
+  else:
+    headers["Content-Type"] = "application/json"
+    toJson(content)
 
 macro handle(
   route:      static[string],
@@ -38,24 +64,6 @@ macro handle(
     when not compiles(`body`(Request())): {.error: "Function error".}
     routes[(`route`, `httpMethod`)] = `body`
 
-## # Macro `Get`
-##
-## **Mô tả**: Macro giúp định nghĩa một route GET trong ứng dụng.
-##
-## - **Tham số**:
-##   - `route`: Chuỗi xác định đường dẫn API (ví dụ: `"/users"`).
-##   - `body`: Định nghĩa nội dung hàm xử lý request.
-##
-## - **Ví dụ**:
-## ```nim
-## Get "/users":
-##   proc getUsers(req: Request): Future[void] {.async.} =
-##     await json(req, Http200, %*{"users": ["Alice", "Bob"]})
-## ```
-##
-## - **Ghi chú**:
-##   - Route được tự động đăng ký vào bảng `routes`.
-##   - Hàm xử lý phải có kiểu `proc (req: Request): Future[void]`.
 macro    Get*(route: static[string], body: untyped): untyped = quote do: handle(`route`, HttpMethod.HttpGet,    `body`)
 macro   Post*(route: static[string], body: untyped): untyped = quote do: handle(`route`, HttpMethod.HttpPost,   `body`)
 macro    Put*(route: static[string], body: untyped): untyped = quote do: handle(`route`, HttpMethod.HttpPut,    `body`)
