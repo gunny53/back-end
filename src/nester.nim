@@ -1,7 +1,6 @@
-import asyncdispatch, asynchttpserver,
-  packages/common/decorators/core/controller,
-  packages/common/di/inject,
-  jsony
+import asyncdispatch, asynchttpserver
+import packages/common/decorators/core/controller
+import jsony
 
 type User = object
   id:   int
@@ -20,13 +19,11 @@ proc newDatabase*(): Database =
 proc newRepository*(db: Database): Repository =
   Repository(db: db)
 
-let repo1 = Inject(Repository, newDatabase)
-
 Controller(""):
   Get("/admins"):
     proc getAdmins(req: Request) {.async.} =
       echo "controller getAdmins processing request"
-      await req.respond(Http200, repo1.db)
+      await req.json(Http200, newRepository(newDatabase()))
 
   Post("/products"):
     proc getProducts(req: Request) {.async.} =
