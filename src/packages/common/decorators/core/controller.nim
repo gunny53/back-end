@@ -64,7 +64,7 @@ macro handle(
     when not compiles(`body`(Request())): {.error: "Function error".}
     routes[(`route`, `httpMethod`)] = `body`
 
-macro    Get*(route: static[string], body: untyped): untyped = quote do: handle(`route`, HttpMethod.HttpGet,    `body`)
-macro   Post*(route: static[string], body: untyped): untyped = quote do: handle(`route`, HttpMethod.HttpPost,   `body`)
-macro    Put*(route: static[string], body: untyped): untyped = quote do: handle(`route`, HttpMethod.HttpPut,    `body`)
-macro Delete*(route: static[string], body: untyped): untyped = quote do: handle(`route`, HttpMethod.HttpDelete, `body`)
+macro    GET*(route: static[string], body: untyped): untyped = quote do: handle(`route`, HttpMethod.HttpGet,    `body`)
+macro   POST*(route: static[string], body: untyped): untyped = quote do: handle(`route`, HttpMethod.HttpPost,   `body`)
+macro    PUT*(route: static[string], body: untyped): untyped = quote do: handle(`route`, HttpMethod.HttpPut,    `body`)
+macro DELETE*(route: static[string], body: untyped): untyped = quote do: handle(`route`, HttpMethod.HttpDelete, `body`)

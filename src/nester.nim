@@ -19,22 +19,22 @@ proc newRepository*(db: Database): Repository =
   Repository(db: db)
 
 Controller(""):
-  Get("/admins"):
+  GET("/admins"):
     proc getAdmins(req: Request) {.async.} =
       echo "controller getAdmins processing request"
       await req.Bad(newRepository(newDatabase()))
 
-  Get("/"):
+  GET("/"):
     proc index(req: Request) {.async.} =
       echo "controller getAdmins processing request"
       await req.Ok($Http413)
 
-  Get("/a"):
+  GET("/a"):
     proc index2(req: Request) {.async.} =
       echo "controller getAdmins processing request"
       await req.Ok(nil)
 
-  Post("/products"):
+  POST("/products"):
     proc getProducts(req: Request) {.async.} =
       let user = User(id: 1, name: "Alice")
       echo "controller products processing request"
