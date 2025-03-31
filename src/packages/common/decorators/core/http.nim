@@ -2,6 +2,19 @@ import macros, asynchttpserver, asyncdispatch, tables, jsony, options
 import ../../../router/route_resolver
 
 proc        Ok*(req: Request, content: auto): Future[void] {.async.} = await req.send(Http200, content)
+proc   Created*(req: Request, content: auto): Future[void] {.async.} = await req.send(Http201, content)
+proc NoContent*(req: Request, content: auto = nil): Future[void] {.async.} = await req.send(HTTP204, nil)
+
+proc Redirect*(req: Request, location: string): Future[void] {.async.} =
+  let headers = newHttpHeaders()
+  headers["Location"] = location
+  await req.respond(Http302, "", headers)
+
+proc RedirectPermanent*(req: Request, location: string): Future[void] {.async.} =
+  let headers = newHttpHeaders()
+  headers["Location"] = location
+  await req.respond(Http301, "", headers)
+
 proc       Bad*(req: Request, content: auto): Future[void] {.async.} = await req.send(Http400, content)
 proc Forbidden*(req: Request, content: auto): Future[void] {.async.} = await req.send(Http403, content)
 
