@@ -8,7 +8,7 @@ type Router* = ref object
 var router* {.threadvar.}: Router
 router = Router(routes: initTable[(string, HttpMethod), tuple[handler: RouteHandler, filePath: string]]())
 
-macro regRoute*(
+macro RouteMapping*(
   route:      static[string],
   httpMethod: static[HttpMethod],
   body:       untyped

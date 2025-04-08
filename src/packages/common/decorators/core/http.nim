@@ -64,7 +64,7 @@ proc withHeaders*(content: auto, headers: HttpHeaders): auto =
     headers["Content-Type"] = "application/json"
     toJson(content)
 
-macro    GET*(route: static[string], body: untyped): untyped = quote do: regRoute(`route`, HttpMethod.HttpGet,    `body`)
-macro   POST*(route: static[string], body: untyped): untyped = quote do: regRoute(`route`, HttpMethod.HttpPost,   `body`)
-macro    PUT*(route: static[string], body: untyped): untyped = quote do: regRoute(`route`, HttpMethod.HttpPut,    `body`)
-macro DELETE*(route: static[string], body: untyped): untyped = quote do: regRoute(`route`, HttpMethod.HttpDelete, `body`)
+macro    GET*(route: static[string], body: untyped): untyped = quote do: RouteMapping(`route`, HttpMethod.HttpGet,    `body`)
+macro   POST*(route: static[string], body: untyped): untyped = quote do: RouteMapping(`route`, HttpMethod.HttpPost,   `body`)
+macro    PUT*(route: static[string], body: untyped): untyped = quote do: RouteMapping(`route`, HttpMethod.HttpPut,    `body`)
+macro DELETE*(route: static[string], body: untyped): untyped = quote do: RouteMapping(`route`, HttpMethod.HttpDelete, `body`)

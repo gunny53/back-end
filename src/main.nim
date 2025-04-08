@@ -64,8 +64,7 @@ waitFor newAsyncHttpServer().serve(
   proc (req: Request) {.async.} =
     let routeKey = (req.url.path, req.reqMethod)  # Lấy cả đường dẫn + phương thức
     if router.routes.hasKey(routeKey): 
-      let intermediate = router.routes[routeKey].handler()
-      await intermediate(req)
+      await router.routes[routeKey].handler()(req)
     else: 
       await req.respond(Http404, "Not Found")
 )
