@@ -1,6 +1,6 @@
 import macros, asynchttpserver, asyncdispatch, tables
 
-type RouteHandler* = proc (things: varargs[string, `$`] = ""): proc (req: Request): Future[void] {.async, gcsafe.} {.async, gcsafe.}
+type RouteHandler* = proc (): proc (req: Request): Future[void] {.async, gcsafe.} {.async, gcsafe.}
 
 type Router* = ref object
   routes*: Table[(string, HttpMethod), tuple[handler: RouteHandler, filePath: string]]
@@ -52,11 +52,8 @@ macro RouteMapping*(
 
   if not hasReq:
     echo "[DEBUG] Chưa có req: Request → thêm thủ công"
-    let reqIdent = genSym(nskParam, "req") # an toàn hơn ident("req")
-    let reqParam = newIdentDefs(reqIdent, ident("Request"), newEmptyNode())
-
-    newParams.add(reqParam)
-    callArgs.add(reqIdent) # dùng chính symbol đã tạo
+    newParams.add(newIdentDefs(ident("req"), ident("Request"), newEmptyNode()))
+    callArgs.add(newIdentDefs(ident("req"), ident("Request"), newEmptyNode())) # dùng chính symbol đã tạo
 
   echo "[DEBUG] Bắt đầu duyệt các param để inject"
   for p in originalParams:
@@ -68,14 +65,9 @@ macro RouteMapping*(
         case typ.strVal
         of "string":
           echo "[DEBUG] Inject Query param: ", $name
-          let defaultValue = newStmtList()  # Tạo danh sách câu lệnh mới
-          defaultValue.add(quote do:
-            var `name`: `typ` = "id_hard_code"  # Gán giá trị mặc định mới
-          )
-
-          let newIdentDef = newIdentDefs(p[0], p[1], defaultValue)  # Thêm giá trị mặc định vào tham số
+          let newIdentDef = newIdentDefs(ident(name.strVal), ident("string"), newLit("dlkm"))  # Thêm giá trị mặc định vào tham số
           newParams.add(newIdentDef)  # Thêm tham số vào danh sách tham số mới
-          callArgs.add(copyNimNode(p[0]))  # Thêm tham số vào danh sách đối số
+          callArgs.add(copyNimNode(name))  # Thêm tham số vào danh sách đối số
         else:
           echo "[DEBUG] Giữ nguyên param: ", $name
           newParams.add(p)
@@ -107,9 +99,9 @@ macro RouteMapping*(
 
   echo "[DEBUG] finalBody:\n", treeRepr(finalBody)
   let handler = quote do:
-    proc (req: Request): Future[void] {.async.} =
+    proc(): proc (req: Request): Future[void] {.async.} =
       `injectedStmts`
-      discard `callOriginal`
+      discard `finalBody`
 
   result = quote do:
     `updatedProc`
