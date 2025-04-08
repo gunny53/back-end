@@ -3,7 +3,7 @@ import packages/logger/console
 import packages/router/route_resolver
 
 # Controllers
-import home/controller/index_controller
+# import home/controller/index_controller
 import store/controller/index_controller
 
 const COLUMNS: seq[string] = @["METHOD", "PATH", "FILE PATH"]
@@ -63,6 +63,9 @@ waitFor newAsyncHttpServer().serve(
   port,
   proc (req: Request) {.async.} =
     let routeKey = (req.url.path, req.reqMethod)  # Lấy cả đường dẫn + phương thức
-    if router.routes.hasKey(routeKey): await router.routes[routeKey].handler(req)  # Gọi handler tương ứng
-    else: await req.respond(Http404, "Not Found")
+    if router.routes.hasKey(routeKey): 
+      let intermediate = router.routes[routeKey].handler()
+      await intermediate(req)
+    else: 
+      await req.respond(Http404, "Not Found")
 )

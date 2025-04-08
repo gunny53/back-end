@@ -4,8 +4,7 @@ import ../../packages/common/decorators/core/http
 
 Controller("/store"):
   GET(""):
-    proc getAdmins(req: Request) {.async.} = await req.Ok("store")
+    proc getAdmins(): auto = Ok("store")
 
-  POST(""):
-    proc te(req: Request) {.async.} = await req.Ok(req.body)
-        
+  POST("/test"):
+    proc test(): auto = Ok("dm")

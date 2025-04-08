@@ -1,4 +1,4 @@
-import macros, asynchttpserver, asyncdispatch, tables, jsony, options
+import macros, asynchttpserver, asyncdispatch, tables, options
 import ../../../router/route_resolver
 
 macro Controller*(prefix: static[string], body: untyped): untyped =

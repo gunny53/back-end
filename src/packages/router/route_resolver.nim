@@ -1,6 +1,6 @@
 import macros, asynchttpserver, asyncdispatch, tables, options
 
-type RouteHandler = proc (req: Request): Future[void] {.async, gcsafe.}
+type RouteHandler* = proc (): proc (req: Request): Future[void] {.async, gcsafe.} {.async, gcsafe.}
 
 type Router* = ref object
   routes*: Table[(string, HttpMethod), tuple[handler: RouteHandler, filePath: string]]

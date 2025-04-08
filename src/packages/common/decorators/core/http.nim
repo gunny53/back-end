@@ -1,22 +1,30 @@
-import macros, asynchttpserver, asyncdispatch, tables, jsony, options
+import macros, asynchttpserver, asyncdispatch, tables, options
 import ../../../router/route_resolver
 
-proc        Ok*(req: Request, content: auto): Future[void] {.async.} = await req.send(Http200, content)
-proc   Created*(req: Request, content: auto): Future[void] {.async.} = await req.send(Http201, content)
-proc NoContent*(req: Request, content: auto = nil): Future[void] {.async.} = await req.send(HTTP204, nil)
+proc Ok*(content: auto): auto = 
+  return proc (req: Request): Future[void] {.async, gcsafe.} =
+    await req.send(Http200, content)
 
-proc Redirect*(req: Request, location: string): Future[void] {.async.} =
-  let headers = newHttpHeaders()
-  headers["Location"] = location
-  await req.respond(Http302, "", headers)
+# proc Redirect*(req: Request, location: string): HandlerFn =
+#   let headers = newHttpHeaders()
+#   headers["Location"] = location
+#   await req.respond(Http302, "", headers)
 
-proc RedirectPermanent*(req: Request, location: string): Future[void] {.async.} =
-  let headers = newHttpHeaders()
-  headers["Location"] = location
-  await req.respond(Http301, "", headers)
+# proc RedirectPermanent*(req: Request, location: string): HandlerFn =
+#   let headers = newHttpHeaders()
+#   headers["Location"] = location
+#   await req.respond(Http301, "", headers)
 
-proc       Bad*(req: Request, content: auto): Future[void] {.async.} = await req.send(Http400, content)
-proc Forbidden*(req: Request, content: auto): Future[void] {.async.} = await req.send(Http403, content)
+# proc       Bad*(req: Request, content: auto): HandlerFn = await req.send(Http400, content)
+# proc Forbidden*(req: Request, content: auto): HandlerFn = await req.send(Http403, content)
+
+proc Bad*(content: auto): proc (req: Request): Future[void] =
+  return proc (req: Request): Future[void] {.async.} =
+    await req.send(Http400, content)
+
+proc Forbidden*(content: auto): proc (req: Request): Future[void] =
+  return proc (req: Request): Future[void] {.async.} =
+    await req.send(Http403, content)
 
 proc send*(
   req:     Request,
