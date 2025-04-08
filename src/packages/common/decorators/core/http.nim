@@ -1,6 +1,12 @@
 import macros, asynchttpserver, asyncdispatch, tables, options
 import ../../../router/route_resolver
 
+type
+  Param*       = distinct string
+  Query*       = string
+  Body*        = string
+  Header*      = string
+
 proc Ok*(content: auto): auto = 
   return proc (req: Request): Future[void] {.async, gcsafe.} =
     await req.send(Http200, content)
