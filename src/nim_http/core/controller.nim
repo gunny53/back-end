@@ -11,21 +11,18 @@ proc send(this: BaseController, code: HttpCode, data: string) = discard this.req
 template Ok*        (content): untyped = this.send(Http200, "{\"message\": \"" & content & "\"}")
 template BadRequest*(content): untyped = this.send(Http400, "{\"message\": \"" & content & "\"}")
 
-proc next*(this: BaseController, handler: auto): Future[void] =
+proc next*(this: auto, handler: auto): Future[void] =
   return handler(this)
 
-template next*(handler: untyped): Future[void] =
-  when declared(self):
-    self.next(handler)
-  elif declared(this):
-    this.next(handler)
+template next*(handler: untyped, typo: typedesc): Future[void] =
+  when declared(this):
+    this.next(proc (this: BaseController): Future[void] {.gcsafe, closure.} = handler(cast[typo](this)))
   else:
     {.error: "next() must be used inside a method with 'self' or 'this'.".}
 
 proc BindRequest*(this: BaseController, req: Request): BaseController =
   this.request = req
   return this
-
 
 macro injector(inst: typed): untyped =
   let

@@ -6,7 +6,8 @@ waitFor newAsyncHttpServer().serve(
   Port(8082),
   proc (req: Request) {.async.} =
     let this = controllerRegistry["HomeController"].BindRequest(req)
-    next(proc (this: BaseController): Future[void] {.gcsafe, closure.} =
-      index(cast[HomeController](this))
+    next(
+      index,
+      HomeController
     )
 )
