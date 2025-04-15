@@ -17,3 +17,5 @@ macro RegisterSingletons*(body: untyped): untyped =
   else: discard
 
 template inject*(): BaseSingleton {.pragma.}
+macro Get*(path: static[string], body: untyped): untyped =
+  result

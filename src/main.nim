@@ -1,6 +1,6 @@
-import asynchttpserver, asyncdispatch, strutils, macros, macrocache, tables
+import asynchttpserver, asyncdispatch, strutils, tables
 import apps/home/main
-import nim_http/core/[controller, di]
+import nim_http/core/controller
 
 waitFor newAsyncHttpServer().serve(
   Port(8082),

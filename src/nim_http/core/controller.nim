@@ -33,18 +33,16 @@ macro injector(inst: typed): untyped =
               for pragma in field:
                 if pragma.eqident"inject":
                   let fieldNameStr = ($fields[0]).strip(chars = {'*'})
-                  let fieldName = ident(fieldNameStr)
+                  let fieldName    = ident(fieldNameStr)
                   let fieldTypeStr = $node[1]
-                  let fieldType = ident(fieldTypeStr)
-                  echo fieldType.kind
-                  echo treeRepr node[1]
+                  let fieldType    = ident(fieldTypeStr)
                   result.add quote do:
                     let rawService = singletonContainer["singleton_" & `fieldTypeStr`]
                     assert rawService != nil
                     let service = cast[`fieldType`](rawService)
                     `inst`.`fieldName` = service
     
-macro Controller*(class: typed, basePath: static[string], body: untyped): untyped =
+macro Controller*(class: typed, body: untyped): untyped =
   let outBody:    NimNode = newStmtList()
   let classIdent: NimNode = ident($class)
   for stmt in body:
@@ -66,11 +64,11 @@ macro Controller*(class: typed, basePath: static[string], body: untyped): untype
 
         let newProc: NimNode = nnkProcDef.newTree(
           procName,
-          stmt[1],  # Optional generics
-          stmt[2],  # Optional pragma
+          stmt[1],
+          stmt[2],
           newParams,
           returnType,
-          stmt[5],  # Optional exceptions
+          stmt[5],
           bodyStmt
         )
         outBody.add(newProc)
@@ -80,10 +78,14 @@ macro Controller*(class: typed, basePath: static[string], body: untyped): untype
       outBody.add(stmt)
   let classNameStr: string = $class
   let register: NimNode    = quote do:
-    let inst      = new `classIdent`
+    let inst = new `classIdent`
     controllerRegistry[`classNameStr`] = cast[BaseController](inst)
     injector(inst)
 
   result = newStmtList()
   result.add(outBody)
   result.add(register)
+
+macro Route*(httpMethod: static[HttpMethod], path: static[string], handler: untyped): untyped =
+  discard
+ 
