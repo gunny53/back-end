@@ -85,7 +85,3 @@ macro Controller*(class: typed, body: untyped): untyped =
   result = newStmtList()
   result.add(outBody)
   result.add(register)
-
-macro Route*(httpMethod: static[HttpMethod], path: static[string], handler: untyped): untyped =
-  discard
- 
