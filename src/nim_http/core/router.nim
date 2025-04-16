@@ -1,4 +1,4 @@
-import asynchttpserver, tables, macros, re, options, strutils
+import asynchttpserver, tables, macros, re, options, strutils, asyncdispatch
 import controller
 
 type
@@ -20,8 +20,8 @@ type
     instance*: BaseController
     handler*:  proc (this: BaseController) {.gcsafe.}
 
-var routeTree* {.threadvar.}: seq[RouteDetail]
-routeTree = @[]
+var routeTree* {.threadvar.}: Table[string, RouteDetail]
+routeTree = initTable[string, RouteDetail]()
 
 proc resolve*(this: RouteDetail, request: Request) =
   this.delegate.instance.processRequest(request).next(this.delegate.handler)
@@ -37,10 +37,10 @@ proc `/`*[T: BaseController](c: typedesc[T], handler: auto): ControllerDelegate 
 proc `->`*(path: string, delegate: ControllerDelegate): RouteItem =
   RouteItem(path: path, delegate: delegate)  
 
-proc parseRoutePattern(pattern: string): RoutePattern =
+proc parseToRegex(path: string): (seq[string], string) =
   var regexStr = "^"
   var paramNames: seq[string] = @[]
-  let parts = pattern.strip(chars = {'/'}).split("/")
+  let parts = path.strip(chars = {'/'}).split("/")
   for part in parts:
     if part.startsWith(":"):
       regexStr.add("/([^/]+)")
@@ -50,31 +50,37 @@ proc parseRoutePattern(pattern: string): RoutePattern =
     else:
       regexStr.add("/" & part)
   regexStr.add("$")
-  result = RoutePattern(raw: pattern, regex: re(regexStr), paramNames: paramNames)
+  result = (paramNames, regexStr)
+
+proc parseRoutePattern(pattern: string): (RoutePattern, string) =
+  let (paramNames, regexStr) = parseToRegex(pattern)
+  result = (RoutePattern(raw: pattern, regex: re(regexStr), paramNames: paramNames), regexStr)
 
 proc register(
   httpMethod: HttpMethod,
   route:      RouteItem
 ) =
-  let pattern = parseRoutePattern(route.path)
-  routeTree.add RouteDetail(
+  let (pattern, key) = parseRoutePattern(route.path)
+  routeTree[key] = RouteDetail(
     httpMethod: httpMethod,
     pattern:    pattern,
     delegate:   route.delegate
   )
 
-proc matchRoute*(requet: Request): Option[RouteDetail] =
-  for route in routeTree:
-    if route.httpMethod == requet.reqMethod:
-      var matches: seq[string] = newSeq[string](route.pattern.paramNames.len + 1)
-      if match(requet.url.path, route.pattern.regex, matches):
-        if matches.len == route.pattern.paramNames.len + 1:
-          for i, name in route.pattern.paramNames:
+proc process*(request: Request): Future[void] {.async.} =
+  let (paramNames, key) = parseToRegex(request.url.path)
+  if routeTree.hasKey(key):
+    let route = routeTree[key]
+    if route.httpMethod == request.reqMethod:
+      var matches: seq[string] = newSeq[string](paramNames.len + 1)
+      if match(request.url.path, route.pattern.regex, matches):
+        if matches.len == paramNames.len + 1:
+          for i, name in paramNames:
             route.delegate.instance.params[name] = matches[i]
-          return some(route)
+          route.resolve(request)
         else:
-          return some(route)
-  return none(RouteDetail)
+          await request.respond(Http400, "not found") 
+  await request.respond(Http400, "not found") 
 
 template Get* (route: RouteItem): untyped = register(HttpGet,  route)
 template Post*(route: RouteItem): untyped = register(HttpPost, route)

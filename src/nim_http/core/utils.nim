@@ -48,5 +48,5 @@ template Query*[T](key: static[string], default: T): T =
   QueryOpt[T](key).getOrElse(default)
 
 template Param*(key: static[string]): string =
-  echo repr this.params
+  # assert(not this.params.hasKey(key), "❌ param with key `" & key & "` not found")
   this.params[key]
