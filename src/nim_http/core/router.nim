@@ -7,82 +7,74 @@ type
     regex*:      Regex
     paramNames*: seq[string]
 
-  RouteWrapper* = object
-    httpMethod*:        HttpMethod
-    pattern*:           RoutePattern
-    handler*:           proc (this: BaseController) {.gcsafe.}
-    controllerFactory*: BaseController
+  RouteDetail* = object
+    httpMethod*: HttpMethod
+    pattern*:    RoutePattern
+    delegate*:   ControllerDelegate
 
-  RouteRegister = object
-    path: string
-    c:    ControllerWrapper
+  RouteItem = object
+    path:     string
+    delegate: ControllerDelegate
 
-  ControllerWrapper* = object
-    clt*: BaseController
-    fn*:  proc (this: BaseController) {.gcsafe.}
+  ControllerDelegate = object
+    instance*: BaseController
+    handler*:  proc (this: BaseController) {.gcsafe.}
 
-var routeTree* {.threadvar.}: seq[RouteWrapper]
+var routeTree* {.threadvar.}: seq[RouteDetail]
 routeTree = @[]
 
-# Syntax sugar: HomeController / index
-proc `/`*[T: BaseController](c: typedesc[T], fn: auto): ControllerWrapper =
-  ControllerWrapper(
-    clt: controllerRegistry[$c],
-    fn: proc(this: BaseController) {.gcsafe.} =
+proc resolve*(this: RouteDetail, request: Request) =
+  this.delegate.instance.processRequest(request).next(this.delegate.handler)
+
+proc `/`*[T: BaseController](c: typedesc[T], handler: auto): ControllerDelegate =
+  ControllerDelegate(
+    instance: controllerRegistry[$c],
+    handler:  proc(this: BaseController) {.gcsafe.} =
       let ctrl = cast[T](this)
-      fn(ctrl)
+      handler(ctrl)
   )
 
-# Syntax sugar: "/path" -> HomeController / index
-proc `->`*(path: string, c: ControllerWrapper): RouteRegister =
-  RouteRegister(path: path, c: c)  
+proc `->`*(path: string, delegate: ControllerDelegate): RouteItem =
+  RouteItem(path: path, delegate: delegate)  
 
-# Parse "/user/:id" => regex "/user/([^/]+)" và lưu lại paramNames
 proc parseRoutePattern(pattern: string): RoutePattern =
   var regexStr = "^"
   var paramNames: seq[string] = @[]
-  let parts = pattern.strip(chars = {'/'}).split("/")  # Loại bỏ các dấu '/' đầu và cuối
+  let parts = pattern.strip(chars = {'/'}).split("/")
   for part in parts:
     if part.startsWith(":"):
       regexStr.add("/([^/]+)")
-      assert part[1..^1] notin paramNames, "Parameter `" & part[1..^1] & "` already exists in route pattern."
-      paramNames.add(part[1..^1])  # Lấy phần sau dấu ":" làm tên tham số
+      let name = part[1..^1]
+      assert name notin paramNames, "Parameter `" & name & "` already exists in route pattern."
+      paramNames.add(name)
     else:
       regexStr.add("/" & part)
   regexStr.add("$")
   result = RoutePattern(raw: pattern, regex: re(regexStr), paramNames: paramNames)
 
-# Đăng ký route
-proc route*(
-  httpMethod:     HttpMethod,
-  path:           string,
-  controllerType: ControllerWrapper
+proc register(
+  httpMethod: HttpMethod,
+  route:      RouteItem
 ) =
-  let r = parseRoutePattern(path)
-  routeTree.add RouteWrapper(
-    httpMethod:        httpMethod,
-    pattern:           r,
-    handler:           controllerType.fn,
-    controllerFactory: controllerType.clt
+  let pattern = parseRoutePattern(route.path)
+  routeTree.add RouteDetail(
+    httpMethod: httpMethod,
+    pattern:    pattern,
+    delegate:   route.delegate
   )
 
-# Match route và trích xuất params
-proc matchRoute*(path: string, method2: HttpMethod): Option[(RouteWrapper, Table[string, string])] =
+proc matchRoute*(requet: Request): Option[RouteDetail] =
   for route in routeTree:
-    if route.httpMethod == method2:
+    if route.httpMethod == requet.reqMethod:
       var matches: seq[string] = newSeq[string](route.pattern.paramNames.len + 1)
-      if match(path, route.pattern.regex, matches):
-        # match luôn push full match ở index 0
+      if match(requet.url.path, route.pattern.regex, matches):
         if matches.len == route.pattern.paramNames.len + 1:
-          var params: Table[string, string] = initTable[string, string]()
           for i, name in route.pattern.paramNames:
-            params[name] = matches[i]
-          return some((route, params))
+            route.delegate.instance.params[name] = matches[i]
+          return some(route)
         else:
-          return some((route, route.controllerFactory.params))
-  return none((RouteWrapper, Table[string, string]))
+          return some(route)
+  return none(RouteDetail)
 
-
-# Shortcut
-template Get* (rr: RouteRegister): untyped = route(HttpGet,  rr.path, rr.c)
-template Post*(rr: RouteRegister): untyped = route(HttpPost, rr.path, rr.c)
+template Get* (route: RouteItem): untyped = register(HttpGet,  route)
+template Post*(route: RouteItem): untyped = register(HttpPost, route)

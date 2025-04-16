@@ -1,17 +1,14 @@
-import asynchttpserver, asyncdispatch, strutils, tables, httpclient, re, options
+import asynchttpserver, asyncdispatch, strutils, httpclient, options
 import apps/home/routes
 import nim_http/core/[controller, router]
 
 waitFor newAsyncHttpServer().serve(
   Port(8082),
-  proc (req: Request) {.async.} =
-    let routeOpt = matchRoute(req.url.path, req.reqMethod)
+  proc (request: Request) {.async.} =
+    let routeOpt = matchRoute(request)
     if routeOpt.isSome:
-      let (route, params) = routeOpt.get()
-      route.controllerFactory
-      .BindRequest(req)
-      .BindParams(params)
-      .next(route.handler, typeof route.controllerFactory)
+      let route = routeOpt.get
+      route.resolve(request)
     else:
-      await req.respond(Http400, "not found")  
+      await request.respond(Http400, "not found")  
 )

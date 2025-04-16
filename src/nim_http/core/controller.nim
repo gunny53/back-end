@@ -12,16 +12,13 @@ proc send(this: BaseController, code: HttpCode, data: string) = discard this.req
 template Ok*        (content): untyped = this.send(Http200, "{\"message\": \"" & content & "\"}")
 template BadRequest*(content): untyped = this.send(Http400, "{\"message\": \"" & content & "\"}")
 
-proc next*(this: auto, handler: auto, typo: typedesc = BaseController) =
-  let fn = proc (this: BaseController): Future[void] {.gcsafe, closure.} = handler(cast[typo](this))
+proc next*(this: auto, handler: auto) =
+  let fn = proc (this: BaseController): Future[void] {.gcsafe, closure.} = handler(this)
   discard fn(this)
+  this.request.reset()
 
-proc BindRequest*(this: BaseController, req: Request): BaseController =
+proc processRequest*(this: BaseController, req: Request): BaseController =
   this.request = req
-  return this
-
-proc BindParams*(this: BaseController, params: Table[string, string]): BaseController =
-  this.params = params
   return this
 
 macro injector(inst: typed): untyped =
