@@ -2,7 +2,7 @@ import macros, asyncdispatch, asynchttpserver, macrocache, tables, sequtils, di,
 
 type BaseController* = ref object of RootObj
   request*: Request
-  
+
 var controllerRegistry* {.threadvar.}: Table[string, BaseController]
 controllerRegistry = initTable[string, BaseController]()
 
@@ -11,9 +11,9 @@ proc send(this: BaseController, code: HttpCode, data: string) = discard this.req
 template Ok*        (content): untyped = this.send(Http200, "{\"message\": \"" & content & "\"}")
 template BadRequest*(content): untyped = this.send(Http400, "{\"message\": \"" & content & "\"}")
 
-proc next*(this: auto, handler: auto, typo: typedesc = BaseController): Future[void] =
+proc next*(this: auto, handler: auto, typo: typedesc = BaseController) =
   let fn = proc (this: BaseController): Future[void] {.gcsafe, closure.} = handler(cast[typo](this))
-  return fn(this)
+  discard fn(this)
 
 proc BindRequest*(this: BaseController, req: Request): BaseController =
   this.request = req

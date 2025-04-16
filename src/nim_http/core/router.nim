@@ -1,13 +1,13 @@
-import asynchttpserver, asyncdispatch, tables
+import asynchttpserver, tables
 import controller
 
 type RouteWrapper* = object
   httpMethod*:        HttpMethod
   path*:              string
   handler*:           proc (this: BaseController) {.gcsafe.}
-  controllerFactory*: proc (): BaseController
+  controllerFactory*: proc (): BaseController {.gcsafe.}
 
-var routeTree {.threadvar.}: Table[string, RouteWrapper]
+var routeTree* {.threadvar.}: Table[string, RouteWrapper]
 routeTree = initTable[string, RouteWrapper]()
 
 proc route*[T: BaseController](httpMethod: HttpMethod, path: string, controllerType: typedesc[T], handler: proc(this: T) {.gcsafe.}) =
@@ -17,8 +17,6 @@ proc route*[T: BaseController](httpMethod: HttpMethod, path: string, controllerT
     handler: proc(this: BaseController) {.gcsafe.} =
       let ctrl = cast[T](this)
       handler(ctrl),
-    controllerFactory: proc(): BaseController =
+    controllerFactory: proc(): BaseController {.gcsafe.} =
       controllerType()
   )
-
-proc routes*(): Table[string, RouteWrapper] = routeTree
