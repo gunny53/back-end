@@ -2,6 +2,7 @@ import macros, asyncdispatch, asynchttpserver, macrocache, tables, sequtils, di,
 
 type BaseController* = ref object of RootObj
   request*: Request
+  params*:  Table[string, string]
 
 var controllerRegistry* {.threadvar.}: Table[string, BaseController]
 controllerRegistry = initTable[string, BaseController]()
@@ -17,6 +18,10 @@ proc next*(this: auto, handler: auto, typo: typedesc = BaseController) =
 
 proc BindRequest*(this: BaseController, req: Request): BaseController =
   this.request = req
+  return this
+
+proc BindParams*(this: BaseController, params: Table[string, string]): BaseController =
+  this.params = params
   return this
 
 macro injector(inst: typed): untyped =

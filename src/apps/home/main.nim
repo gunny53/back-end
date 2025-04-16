@@ -1,4 +1,4 @@
-import ../../nim_http/core/[controller, utils, di, router], options
+import ../../nim_http/core/[controller, di]
 import ./services/[user_service, log_service]
 import asynchttpserver
 
@@ -8,10 +8,6 @@ type HomeController* = ref object of BaseController
 
 Controller(HomeController):
   proc index*() =
-    let name = QueryOpt[string]("name")
-    let age  = QueryOpt[int]("age").getOrElse(9)
-    echo name.getOrElse("aga")
-    echo age
     Ok "Hello from HomeController! " & this.userService.name
 
   proc about*() =
