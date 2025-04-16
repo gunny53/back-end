@@ -9,6 +9,7 @@ type HomeController* = ref object of BaseController
 Controller(HomeController):
   proc index*() =
     let id = Param("id")
+    echo id
     Ok "Hello from HomeController! " & this.userService.name
 
   proc about*() =

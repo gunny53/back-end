@@ -76,7 +76,7 @@ proc matchRoute*(path: string, method2: HttpMethod): Option[(RouteWrapper, Table
         if matches.len == route.pattern.paramNames.len + 1:
           var params: Table[string, string] = initTable[string, string]()
           for i, name in route.pattern.paramNames:
-            params[name] = matches[i + 1]
+            params[name] = matches[i]
           return some((route, params))
         else:
           return some((route, route.controllerFactory.params))
