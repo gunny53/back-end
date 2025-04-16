@@ -6,14 +6,17 @@ type
     raw*:        string
     regex*:      Regex
     paramNames*: seq[string]
+
   RouteWrapper* = object
     httpMethod*:        HttpMethod
     pattern*:           RoutePattern
     handler*:           proc (this: BaseController) {.gcsafe.}
     controllerFactory*: BaseController
+
   RouteRegister = object
     path: string
     c:    ControllerWrapper
+
   ControllerWrapper* = object
     clt*: BaseController
     fn*:  proc (this: BaseController) {.gcsafe.}
@@ -21,6 +24,7 @@ type
 var routeTree* {.threadvar.}: seq[RouteWrapper]
 routeTree = @[]
 
+# Syntax sugar: HomeController / index
 proc `/`*[T: BaseController](c: typedesc[T], fn: auto): ControllerWrapper =
   ControllerWrapper(
     clt: controllerRegistry[$c],
@@ -29,9 +33,11 @@ proc `/`*[T: BaseController](c: typedesc[T], fn: auto): ControllerWrapper =
       fn(ctrl)
   )
 
+# Syntax sugar: "/path" -> HomeController / index
 proc `->`*(path: string, c: ControllerWrapper): RouteRegister =
   RouteRegister(path: path, c: c)  
 
+# Parse "/user/:id" => regex "/user/([^/]+)" và lưu lại paramNames
 proc parseRoutePattern(pattern: string): RoutePattern =
   var regexStr = "^"
   var paramNames: seq[string] = @[]
@@ -39,6 +45,7 @@ proc parseRoutePattern(pattern: string): RoutePattern =
   for part in parts:
     if part.startsWith(":"):
       regexStr.add("/([^/]+)")
+      assert part[1..^1] notin paramNames, "Parameter `" & part[1..^1] & "` already exists in route pattern."
       paramNames.add(part[1..^1])  # Lấy phần sau dấu ":" làm tên tham số
     else:
       regexStr.add("/" & part)
@@ -51,26 +58,30 @@ proc route*(
   path:           string,
   controllerType: ControllerWrapper
 ) =
+  let r = parseRoutePattern(path)
   routeTree.add RouteWrapper(
     httpMethod:        httpMethod,
-    pattern:           parseRoutePattern(path),
+    pattern:           r,
     handler:           controllerType.fn,
     controllerFactory: controllerType.clt
   )
 
-proc resolveRoute*(path: string, method2: HttpMethod): Option[(RouteWrapper, Table[string, string])] =
+# Match route và trích xuất params
+proc matchRoute*(path: string, method2: HttpMethod): Option[(RouteWrapper, Table[string, string])] =
   for route in routeTree:
     if route.httpMethod == method2:
       var matches: seq[string] = newSeq[string](route.pattern.paramNames.len + 1)
       if match(path, route.pattern.regex, matches):
+        # match luôn push full match ở index 0
         if matches.len == route.pattern.paramNames.len + 1:
           var params: Table[string, string] = initTable[string, string]()
           for i, name in route.pattern.paramNames:
-            params[name] = matches[i]
+            params[name] = matches[i + 1]
           return some((route, params))
-      else:
-        return some((route, initTable[string, string]())) 
+        else:
+          return some((route, route.controllerFactory.params))
   return none((RouteWrapper, Table[string, string]))
+
 
 # Shortcut
 template Get* (rr: RouteRegister): untyped = route(HttpGet,  rr.path, rr.c)

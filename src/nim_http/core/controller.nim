@@ -2,7 +2,7 @@ import macros, asyncdispatch, asynchttpserver, macrocache, tables, sequtils, di,
 
 type BaseController* = ref object of RootObj
   request*: Request
-  params*:  Table[string, string]
+  params*:  Table[string, string] = initTable[string, string]()
 
 var controllerRegistry* {.threadvar.}: Table[string, BaseController]
 controllerRegistry = initTable[string, BaseController]()

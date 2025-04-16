@@ -1,4 +1,4 @@
-import ../../nim_http/core/[controller, di]
+import ../../nim_http/core/[controller, di, utils]
 import ./services/[user_service, log_service]
 import asynchttpserver
 
@@ -8,6 +8,7 @@ type HomeController* = ref object of BaseController
 
 Controller(HomeController):
   proc index*() =
+    let id = Param("id")
     Ok "Hello from HomeController! " & this.userService.name
 
   proc about*() =

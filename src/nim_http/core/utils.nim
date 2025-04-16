@@ -46,3 +46,7 @@ template QuerySeq*[T](key: static[string]): seq[T] =
 
 template Query*[T](key: static[string], default: T): T =
   QueryOpt[T](key).getOrElse(default)
+
+template Param*(key: static[string]): string =
+  echo repr this.params
+  this.params[key]
