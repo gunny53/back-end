@@ -12,7 +12,7 @@ Controller(HomeController):
     let age  = QueryOpt[int]("age").getOrElse(9)
     echo name.getOrElse("aga")
     echo age
-    Ok "Hello from HomeController! " 
+    Ok "Hello from HomeController! " & this.userService.name
 
   proc about*() =
     Ok("Hello from HomeController! " & this.userService.name)

@@ -7,8 +7,7 @@ waitFor newAsyncHttpServer().serve(
   proc (req: Request) {.async.} =
     if routeTree.hasKey(req.url.path):
       let conf = routeTree[req.url.path]
-      let ctl  = conf.controllerFactory()
-      ctl.BindRequest(req).next(conf.handler, typeof ctl)
+      conf.controllerFactory.BindRequest(req).next(conf.handler, typeof conf.controllerFactory)
     else:
       await req.respond(Http400, "not found")  
 )
