@@ -1,5 +1,5 @@
 import asynchttpserver, asyncdispatch, strutils, tables
-import apps/home/main
+import apps/home/routes
 import nim_http/core/[controller, router]
 
 waitFor newAsyncHttpServer().serve(

@@ -16,6 +16,3 @@ Controller(HomeController):
 
   proc about*() =
     Ok("Hello from HomeController! " & this.userService.name)
-
-route(HttpGet, "/",      HomeController, index)
-route(HttpGet, "/about", HomeController, about)    
