@@ -1,0 +1,40 @@
+# =====================
+# Nim .gitignore
+# =====================
+
+# Nimble package files
+nimcache/
+*.nimble.cache
+
+# Binary / build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+*.out
+*.app
+*.a
+*.o
+*.obj
+
+# VSCode / Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
+
+# Nim doc/output
+doc/
+htmldocs/
+
+# User/test-generated files
+*.bak
+*.tmp
+*.test

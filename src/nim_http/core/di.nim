@@ -12,8 +12,7 @@ macro RegisterSingletons*(body: untyped): untyped =
     let bodyType = $body
     result.add quote do:
       let inst = new(`body`)
-      echo "singleton_" & `bodyType`
-      singletonContainer["singleton_" & `bodyType`] = inst
+      singletonContainer["singleton_" & `bodyType`] = new(`body`)
   else: discard
 
 template inject*(): BaseSingleton {.pragma.}

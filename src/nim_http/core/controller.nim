@@ -40,7 +40,6 @@ macro injector(inst: typed): untyped =
                   let fieldType    = ident(fieldTypeStr)
                   result.add quote do:
                     let rawService = singletonContainer["singleton_" & `fieldTypeStr`]
-                    assert rawService != nil
                     let service = cast[`fieldType`](rawService)
                     `inst`.`fieldName` = service
     

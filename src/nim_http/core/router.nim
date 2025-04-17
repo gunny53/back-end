@@ -82,5 +82,9 @@ proc process*(request: Request): Future[void] {.async.} =
           await request.respond(Http400, "not found") 
   await request.respond(Http400, "not found") 
 
-template Get* (route: RouteItem): untyped = register(HttpGet,  route)
-template Post*(route: RouteItem): untyped = register(HttpPost, route)
+template Get*     (route: RouteItem): untyped = register(HttpGet,     route)
+template Post*    (route: RouteItem): untyped = register(HttpPost,    route)
+template Put*     (route: RouteItem): untyped = register(HttpPut,     route)
+template Patch*   (route: RouteItem): untyped = register(HttpPatch,   route)
+template Options* (route: RouteItem): untyped = register(HttpOptions, route)
+template Delete*  (route: RouteItem): untyped = register(HttpDelete,  route)

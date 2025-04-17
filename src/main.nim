@@ -1,8 +1,7 @@
-import asynchttpserver, asyncdispatch, strutils, httpclient, options
+import nim_http/core/app
 import apps/home/routes
-import nim_http/core/[controller, router]
 
-waitFor newAsyncHttpServer().serve(
-  Port(8082),
-  proc (request: Request) {.async.} = await request.process
-)
+let settings = NimHttpApplicationSettings()
+settings.host = "127.0.0.1"
+settings.port = 8888
+NimHttpApplication(settings: settings).listen
