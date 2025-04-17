@@ -47,7 +47,7 @@ proc `/`*[T: BaseController](c: typedesc[T], handler: auto): ControllerDelegate 
 proc `->`*(path: string, delegate: ControllerDelegate): RouteItem =
   RouteItem(path: path, delegate: delegate)  
 
-proc `~`*(this: ControllerDelegate, guards: seq[typedesc[AuthGuard]]): ControllerDelegate =
+proc `/`*(this: ControllerDelegate, guards: seq[AuthGuard]): ControllerDelegate =
   var r = this
   r.guards = guards
   r
