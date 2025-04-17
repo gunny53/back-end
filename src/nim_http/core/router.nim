@@ -1,5 +1,5 @@
 import asynchttpserver, tables, macros, re, options, strutils, asyncdispatch
-import controller
+import controller, guard
 
 type
   RoutePattern = object
@@ -19,12 +19,22 @@ type
   ControllerDelegate = object
     instance*: BaseController
     handler*:  proc (this: BaseController) {.gcsafe.}
+    guards*:   seq[AuthGuard]
 
 var routeTree* {.threadvar.}: Table[string, RouteDetail]
 routeTree = initTable[string, RouteDetail]()
 
+type
+  GuardFailedError* = object of CatchableError
+
 proc resolve*(this: RouteDetail, request: Request) =
-  this.delegate.instance.processRequest(request).next(this.delegate.handler)
+  var canActive = false
+  for guard in this.delegate.guards:
+    canActive = guard.canActivate(request)
+  if canActive:
+    this.delegate.instance.processRequest(request).next(this.delegate.handler)
+  else:
+    raise newException(GuardFailedError, "Guard check failed")
 
 proc `/`*[T: BaseController](c: typedesc[T], handler: auto): ControllerDelegate =
   ControllerDelegate(
@@ -37,9 +47,15 @@ proc `/`*[T: BaseController](c: typedesc[T], handler: auto): ControllerDelegate 
 proc `->`*(path: string, delegate: ControllerDelegate): RouteItem =
   RouteItem(path: path, delegate: delegate)  
 
+proc `~`*(this: ControllerDelegate, guards: seq[typedesc[AuthGuard]]): ControllerDelegate =
+  var r = this
+  r.guards = guards
+  r
+
 proc parseToRegex(path: string): (seq[string], string) =
-  var regexStr = "^"
-  var paramNames: seq[string] = @[]
+  var 
+    regexStr                = "^"
+    paramNames: seq[string] = @[]
   let parts = path.strip(chars = {'/'}).split("/")
   for part in parts:
     if part.startsWith(":"):
@@ -77,10 +93,13 @@ proc process*(request: Request): Future[void] {.async.} =
         if matches.len == paramNames.len + 1:
           for i, name in paramNames:
             route.delegate.instance.params[name] = matches[i]
-          route.resolve(request)
+          try:
+            route.resolve(request)
+          except GuardFailedError as e:
+            await request.respond(Http401, e.msg)
         else:
-          await request.respond(Http400, "not found") 
-  await request.respond(Http400, "not found") 
+          await request.respond(Http400, "not found")
+  await request.respond(Http400, "not found")
 
 template Get*     (route: RouteItem): untyped = register(HttpGet,     route)
 template Post*    (route: RouteItem): untyped = register(HttpPost,    route)

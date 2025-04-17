@@ -42,7 +42,7 @@ macro injector(inst: typed): untyped =
                     let rawService = singletonContainer["singleton_" & `fieldTypeStr`]
                     let service = cast[`fieldType`](rawService)
                     `inst`.`fieldName` = service
-    
+
 macro Controller*(class: typed, body: untyped): untyped =
   let outBody:    NimNode = newStmtList()
   let classIdent: NimNode = ident($class)
