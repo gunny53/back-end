@@ -1,4 +1,4 @@
-import asynchttpserver, tables, macros, re, options, strutils, asyncdispatch
+import asynchttpserver, tables, macros, re, options, strutils, asyncdispatch, sequtils
 import controller, guard
 
 type
@@ -19,7 +19,7 @@ type
   ControllerDelegate = object
     instance*: BaseController
     handler*:  proc (this: BaseController) {.gcsafe.}
-    guards*:   seq[AuthGuard]
+    guards*:   seq[Guard]
 
 var routeTree* {.threadvar.}: Table[string, RouteDetail]
 routeTree = initTable[string, RouteDetail]()
@@ -28,13 +28,11 @@ type
   GuardFailedError* = object of CatchableError
 
 proc resolve*(this: RouteDetail, request: Request) =
-  var canActive = false
   for guard in this.delegate.guards:
-    canActive = guard.canActivate(request)
-  if canActive:
-    this.delegate.instance.processRequest(request).next(this.delegate.handler)
-  else:
-    raise newException(GuardFailedError, "Guard check failed")
+    if not guard.canActivate(request):
+      raise newException(GuardFailedError, "Guard check failed: ")
+  this.delegate.instance.processRequest(request).next(this.delegate.handler)
+
 
 proc `/`*[T: BaseController](c: typedesc[T], handler: auto): ControllerDelegate =
   ControllerDelegate(
@@ -44,13 +42,13 @@ proc `/`*[T: BaseController](c: typedesc[T], handler: auto): ControllerDelegate 
       handler(ctrl)
   )
 
+proc `/`*[T: Guard](this: ControllerDelegate, guards: seq[T]): ControllerDelegate =
+  var route    = this
+  route.guards = guards.mapIt(cast[Guard](it))
+  route
+
 proc `->`*(path: string, delegate: ControllerDelegate): RouteItem =
   RouteItem(path: path, delegate: delegate)  
-
-proc `/`*(this: ControllerDelegate, guards: seq[AuthGuard]): ControllerDelegate =
-  var r = this
-  r.guards = guards
-  r
 
 proc parseToRegex(path: string): (seq[string], string) =
   var 

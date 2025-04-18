@@ -1,18 +1,18 @@
-import asyncdispatch, asynchttpserver, utils
+import asynchttpserver
 
 type Guard* = ref object of RootObj
   request: Request
 
-proc canActivate*(self: Guard, req: Request): bool = 
-  return false
+method canActivate*(self: Guard, req: Request): bool {.base, gcsafe.} =
+  echo "Default guard"
+  return true
 
 type AuthGuard* = ref object of Guard
 
-proc canActivate*(self: AuthGuard, req: Request): bool =
-  echo "asdasdas"
+method canActivate*(self: AuthGuard, req: Request): bool =
+  echo "asdasdasdadas"
   if (req.headers.hasKey("Authorization")):
     let token = req.headers["Authorization"]
+    echo token
     return token == "Bearer valid_token"
   return false
-
-template authGuard*(): AuthGuard {.pragma.}
