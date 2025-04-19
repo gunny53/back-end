@@ -42,8 +42,8 @@ macro injector(inst: typed): untyped =
                   let fieldTypeStr = $node[1]
                   let fieldType    = ident(fieldTypeStr)
                   result.add quote do:
-                    let rawService = singletonContainer["singleton_" & `fieldTypeStr`]
-                    let service = cast[`fieldType`](rawService)
+                    let rawService     = singletonContainer["singleton_" & `fieldTypeStr`]
+                    let service        = cast[`fieldType`](rawService)
                     `inst`.`fieldName` = service
 
 macro Controller*(class: typed, body: untyped): untyped =
@@ -58,7 +58,10 @@ macro Controller*(class: typed, body: untyped): untyped =
       let pragmas     = stmt[4]  # Giữ pragmas gốc
       let annotations = stmt[5]  # Annotations
       let procBody    = stmt[6]  # Thân hàm
-      echo treeRepr params
+
+      for pragma in pragmas:
+        echo pragma.treeRepr
+
       let thisDefined = anyIt(params[1..^1], it[1].kind != nnkEmpty and $it[1] == "BaseController")
       # Nếu chưa có param nào (chỉ có return type), thì chèn this vào
       if not thisDefined:

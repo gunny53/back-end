@@ -33,13 +33,19 @@ proc resolve*(this: RouteDetail, request: Request): Future[void] =
       raise newException(GuardFailedError, "Guard check failed: ")
   this.delegate.instance.processRequest(request).invoke(this.delegate.handler).finallize()
 
-proc `/`*[T: BaseController](c: typedesc[T], handler: auto): ControllerDelegate =
-  ControllerDelegate(
-    instance: controllerRegistry[$c],
-    handler:  proc (this: BaseController): Future[void] {.gcsafe.} =
-      let ctrl = cast[T](this)
-      handler(ctrl)
-  )
+macro `/`*[T: BaseController](c: typedesc[T], handler: untyped): ControllerDelegate =
+  let ctrlSym    = c
+  let methodName = $handler
+  result = quote do:
+    echo `handler`.repr
+    let hand =
+      proc (this: BaseController): Future[void] {.gcsafe.} =
+        let ctrl = cast[`ctrlSym`](this)
+        `handler`(ctrl)
+    ControllerDelegate(
+      instance: controllerRegistry[$`c`],
+      handler:  hand
+    )
 
 proc `->`*(path: string, delegate: ControllerDelegate): RouteItem =
   RouteItem(path: path, delegate: delegate)  
@@ -93,9 +99,9 @@ proc process*(request: Request): Future[void] {.async.} =
           await request.respond(Http400, "not found")
   await request.respond(Http400, "not found")
 
-template Get*     (route: RouteItem): untyped = register(HttpGet,     route)
-template Post*    (route: RouteItem): untyped = register(HttpPost,    route)
-template Put*     (route: RouteItem): untyped = register(HttpPut,     route)
-template Patch*   (route: RouteItem): untyped = register(HttpPatch,   route)
-template Options* (route: RouteItem): untyped = register(HttpOptions, route)
-template Delete*  (route: RouteItem): untyped = register(HttpDelete,  route)
+template Get*    (route: RouteItem): untyped = register(HttpGet,     route)
+template Post*   (route: RouteItem): untyped = register(HttpPost,    route)
+template Put*    (route: RouteItem): untyped = register(HttpPut,     route)
+template Patch*  (route: RouteItem): untyped = register(HttpPatch,   route)
+template Options*(route: RouteItem): untyped = register(HttpOptions, route)
+template Delete* (route: RouteItem): untyped = register(HttpDelete,  route)
