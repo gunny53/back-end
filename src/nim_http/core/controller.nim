@@ -12,9 +12,12 @@ proc send(this: BaseController, code: HttpCode, data: string) = discard this.req
 template Ok*        (content): untyped = this.send(Http200, "{\"message\": \"" & content & "\"}")
 template BadRequest*(content): untyped = this.send(Http400, "{\"message\": \"" & content & "\"}")
 
-proc next*(this: auto, handler: auto) =
-  let fn = proc (this: BaseController): Future[void] {.gcsafe, closure.} = handler(this)
+proc invoke*(this: BaseController, handler: auto): BaseController =
+  let fn = proc (this: BaseController): Future[void] {.gcsafe, closure, async.} = await handler(this)
   discard fn(this)
+  return this
+
+proc finallize*(this: BaseController) =
   this.request.reset()
 
 proc processRequest*(this: BaseController, req: Request): BaseController =
@@ -48,29 +51,30 @@ macro Controller*(class: typed, body: untyped): untyped =
   let classIdent: NimNode = ident($class)
   for stmt in body:
     if stmt.kind == nnkProcDef:
-      let procName:   NimNode = stmt[0]
-      let params:     NimNode = stmt[3]
-      let returnType: NimNode = stmt[4]
-      let bodyStmt:   NimNode = stmt[6]
-      
+      let procName    = stmt[0]  # Tên hàm
+      let generic     = stmt[1]  # Generic params (nếu có)
+      let patterns    = stmt[2]  # Pattern params (rarely used)
+      let params      = stmt[3]  # Đã patch "this"
+      let pragmas     = stmt[4]  # Giữ pragmas gốc
+      let annotations = stmt[5]  # Annotations
+      let procBody    = stmt[6]  # Thân hàm
+      echo treeRepr params
       let thisDefined = anyIt(params[1..^1], it[1].kind != nnkEmpty and $it[1] == "BaseController")
       # Nếu chưa có param nào (chỉ có return type), thì chèn this vào
       if not thisDefined:
-        let thisParam: NimNode = newIdentDefs(ident("this"), class)
-        let newParams: NimNode = nnkFormalParams.newTree()
-        newParams.add(returnType)
-        newParams.add(thisParam)
-        for i in 2..<params.len:
-          newParams.add(params[i])
+        let thisParam = newIdentDefs(ident("this"), class)
+        let newParams = nnkFormalParams.newTree(params[0], thisParam)
+        for i in 2..<params[0].len:
+          newParams.add(params[0][i])
 
         let newProc: NimNode = nnkProcDef.newTree(
-          procName,
-          stmt[1],
-          stmt[2],
-          newParams,
-          returnType,
-          stmt[5],
-          bodyStmt
+          procName,     # Tên hàm
+          generic,      # Generic params (nếu có)
+          patterns,     # Pattern params (rarely used)
+          newParams,    # Đã patch "this"
+          pragmas,      # Giữ pragmas gốc
+          annotations,  # Annotations
+          procBody      # Thân hàm
         )
         outBody.add(newProc)
       else:

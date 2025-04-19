@@ -1,4 +1,4 @@
-import tables, macros
+import tables, macros, asyncdispatch
 
 type BaseSingleton* = ref object of RootObj
 
@@ -16,5 +16,6 @@ macro RegisterSingletons*(body: untyped): untyped =
   else: discard
 
 template inject*(): BaseSingleton {.pragma.}
+template inject2*(): auto {.pragma.}
 macro Get*(path: static[string], body: untyped): untyped =
   result

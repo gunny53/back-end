@@ -16,3 +16,5 @@ method canActivate*(self: AuthGuard, req: Request): bool =
     echo token
     return token == "Bearer valid_token"
   return false
+
+template useGuards*(guards: auto): seq[Guard] {.pragma.}

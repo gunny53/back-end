@@ -18,7 +18,7 @@ type
 
   ControllerDelegate = object
     instance*: BaseController
-    handler*:  proc (this: BaseController) {.gcsafe.}
+    handler*:  proc (this: BaseController): Future[void] {.gcsafe.}
     guards*:   seq[Guard]
 
 var routeTree* {.threadvar.}: Table[string, RouteDetail]
@@ -27,25 +27,19 @@ routeTree = initTable[string, RouteDetail]()
 type
   GuardFailedError* = object of CatchableError
 
-proc resolve*(this: RouteDetail, request: Request) =
+proc resolve*(this: RouteDetail, request: Request): Future[void] =
   for guard in this.delegate.guards:
     if not guard.canActivate(request):
       raise newException(GuardFailedError, "Guard check failed: ")
-  this.delegate.instance.processRequest(request).next(this.delegate.handler)
-
+  this.delegate.instance.processRequest(request).invoke(this.delegate.handler).finallize()
 
 proc `/`*[T: BaseController](c: typedesc[T], handler: auto): ControllerDelegate =
   ControllerDelegate(
     instance: controllerRegistry[$c],
-    handler:  proc(this: BaseController) {.gcsafe.} =
+    handler:  proc (this: BaseController): Future[void] {.gcsafe.} =
       let ctrl = cast[T](this)
       handler(ctrl)
   )
-
-proc `/`*[T: Guard](this: ControllerDelegate, guards: seq[T]): ControllerDelegate =
-  var route    = this
-  route.guards = guards.mapIt(cast[Guard](it))
-  route
 
 proc `->`*(path: string, delegate: ControllerDelegate): RouteItem =
   RouteItem(path: path, delegate: delegate)  
@@ -92,7 +86,7 @@ proc process*(request: Request): Future[void] {.async.} =
           for i, name in paramNames:
             route.delegate.instance.params[name] = matches[i]
           try:
-            route.resolve(request)
+            await route.resolve(request)
           except GuardFailedError as e:
             await request.respond(Http401, e.msg)
         else:
