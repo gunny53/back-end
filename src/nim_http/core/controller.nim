@@ -1,8 +1,10 @@
 import macros, asyncdispatch, asynchttpserver, macrocache, tables, sequtils, di, strutils
+import guard
 
 type BaseController* = ref object of RootObj
   request*: Request
-  params*:  Table[string, string] = initTable[string, string]()
+  params*:  Table[string, string]     = initTable[string, string]()
+  guards*:  Table[string, seq[Guard]] = initTable[string, seq[Guard]]()
 
 var controllerRegistry* {.threadvar.}: Table[string, BaseController]
 controllerRegistry = initTable[string, BaseController]()
@@ -49,19 +51,26 @@ macro injector(inst: typed): untyped =
 macro Controller*(class: typed, body: untyped): untyped =
   let outBody:    NimNode = newStmtList()
   let classIdent: NimNode = ident($class)
+  var guards:     Table[string, seq[NimNode]] = initTable[string, seq[NimNode]]()
   for stmt in body:
+    var pragmas: NimNode  = newEmptyNode()
     if stmt.kind == nnkProcDef:
       let procName    = stmt[0]  # Tên hàm
       let generic     = stmt[1]  # Generic params (nếu có)
       let patterns    = stmt[2]  # Pattern params (rarely used)
       let params      = stmt[3]  # Đã patch "this"
-      let pragmas     = stmt[4]  # Giữ pragmas gốc
+      pragmas         = stmt[4]  # Giữ pragmas gốc
       let annotations = stmt[5]  # Annotations
       let procBody    = stmt[6]  # Thân hàm
 
       for pragma in pragmas:
-        echo pragma.treeRepr
-
+        if pragma.kind == nnkCall:
+          if pragma[0].eqIdent("useGuards"):
+            for brk in pragma[1]:
+              if guards.hasKey($procName):
+                guards[$procName].add(ident($brk))
+              else:
+                guards[$procName] = @[ident($brk)]  
       let thisDefined = anyIt(params[1..^1], it[1].kind != nnkEmpty and $it[1] == "BaseController")
       # Nếu chưa có param nào (chỉ có return type), thì chèn this vào
       if not thisDefined:
@@ -84,12 +93,20 @@ macro Controller*(class: typed, body: untyped): untyped =
         outBody.add(stmt)
     else:
       outBody.add(stmt)
+
   let classNameStr: string = $class
   let register: NimNode    = quote do:
     let inst = new `classIdent`
     controllerRegistry[`classNameStr`] = cast[BaseController](inst)
     injector(inst)
-
+    var vvv = `guards`
+    for key, guardList in vvv.pairs:
+      let guardCalls = guardList.mapIt(it())
+      for instGuard in guardCalls:
+        if controllerRegistry[`classNameStr`].guards.hasKey(key):
+          controllerRegistry[`classNameStr`].guards[key].add(instGuard)
+        else:
+          controllerRegistry[`classNameStr`].guards[key] = @[instGuard]
   result = newStmtList()
   result.add(outBody)
   result.add(register)

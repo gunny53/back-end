@@ -27,6 +27,7 @@ routeTree = initTable[string, RouteDetail]()
 type
   GuardFailedError* = object of CatchableError
 
+# Hàm xử lý request, kiểm tra các guards, middleware, interceptors trước khi thực thi nghiệp vụ ở controller
 proc resolve*(this: RouteDetail, request: Request): Future[void] =
   for guard in this.delegate.guards:
     if not guard.canActivate(request):
@@ -36,15 +37,18 @@ proc resolve*(this: RouteDetail, request: Request): Future[void] =
 macro `/`*[T: BaseController](c: typedesc[T], handler: untyped): ControllerDelegate =
   let ctrlSym    = c
   let methodName = $handler
+  echo methodName
   result = quote do:
     echo `handler`.repr
     let hand =
       proc (this: BaseController): Future[void] {.gcsafe.} =
         let ctrl = cast[`ctrlSym`](this)
         `handler`(ctrl)
+    let guards = controllerRegistry[$`c`].guards[`methodName`]    
     ControllerDelegate(
       instance: controllerRegistry[$`c`],
-      handler:  hand
+      handler:  hand,
+      guards:   guards
     )
 
 proc `->`*(path: string, delegate: ControllerDelegate): RouteItem =
