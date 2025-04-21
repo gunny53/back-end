@@ -2,20 +2,24 @@ import asynchttpserver, tables, macros, re, options, strutils, asyncdispatch
 import controller, guard
 
 type
+  # Lưu thông tin meta của route dưới dạng regex pattern
   RoutePattern = object
     raw*:        string
     regex*:      Regex
     paramNames*: seq[string]
 
+  # Lưu thông tin chi tiết của 1 route
   RouteDetail* = object
     httpMethod*: HttpMethod
     pattern*:    RoutePattern
     delegate*:   ControllerDelegate
 
+  # Lưu thông tin của 1 route
   RouteItem = object
     path:     string
     delegate: ControllerDelegate
 
+  # Lưu thông tin của controller
   ControllerDelegate = object
     instance*: BaseController
     handler*:  proc (this: BaseController): Future[void] {.gcsafe.}
@@ -35,30 +39,31 @@ proc resolve*(this: RouteDetail, request: Request): Future[void] {.async.} =
         raise newException(GuardFailedError, "Guard check failed: ")
   this.delegate.instance.processRequest(request).invoke(this.delegate.handler)
 
-macro `/`*[T: BaseController](c: typedesc[T], handler: untyped): ControllerDelegate =
-  let ctrlSym    = c
+# Lưu thông tin function handler cho request, bao gồm controller instance, guards, handler function
+macro `/`*[T: BaseController](ctlClass: typedesc[T], handler: untyped): ControllerDelegate =
+  let ctrlSym    = ctlClass
   let methodName = $handler
-  echo methodName
-  result = quote do:
-    echo `handler`.repr
+  result         = quote do:
     let hand =
       proc (this: BaseController): Future[void] {.gcsafe.} =
         let ctrl = cast[`ctrlSym`](this)
         `handler`(ctrl)
     let guards = (
-      if controllerRegistry[$`c`].guards.hasKey(`methodName` & "*"):
-        controllerRegistry[$`c`].guards[`methodName` & "*"]
+      if controllerRegistry[$`ctlClass`].guards.hasKey(`methodName` & "*"):
+        controllerRegistry[$`ctlClass`].guards[`methodName` & "*"]
        else: @[] 
     )
     ControllerDelegate(
-      instance: controllerRegistry[$`c`],
+      instance: controllerRegistry[$`ctlClass`],
       handler:  hand,
       guards:   guards
     )
 
+# Lưu thông tin của url path sẽ mapping với Controller xử lý nghiệp vụ
 proc `->`*(path: string, delegate: ControllerDelegate): RouteItem =
   RouteItem(path: path, delegate: delegate)  
 
+# Hàm hỗ trợ chuyển đổi url path string sang regex
 proc parseToRegex(path: string): (seq[string], string) =
   var 
     regexStr                = "^"
@@ -75,10 +80,12 @@ proc parseToRegex(path: string): (seq[string], string) =
   regexStr.add("$")
   result = (paramNames, regexStr)
 
+# Hàm lưu thông tin của url (đã chuyển đổi sang regex pattern), bao gồm params binds
 proc parseRoutePattern(pattern: string): (RoutePattern, string) =
   let (paramNames, regexStr) = parseToRegex(pattern)
   result = (RoutePattern(raw: pattern, regex: re(regexStr), paramNames: paramNames), regexStr)
 
+# Đăng ký route
 proc register(
   httpMethod: HttpMethod,
   route:      RouteItem
@@ -90,6 +97,7 @@ proc register(
     delegate:   route.delegate
   )
 
+# Hàm xử lý request tại tầng router
 proc process*(request: Request): Future[void] {.async.} =
   let (paramNames, key) = parseToRegex(request.url.path)
   if routeTree.hasKey(key):
