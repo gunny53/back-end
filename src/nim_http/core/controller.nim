@@ -51,7 +51,7 @@ macro injector(inst: typed): untyped =
 macro Controller*(class: typed, body: untyped): untyped =
   let outBody:    NimNode = newStmtList()
   let classIdent: NimNode = ident($class)
-  var guards:     Table[string, seq[NimNode]] = initTable[string, seq[NimNode]]()
+  var guardsTb:   Table[string, seq[NimNode]] = initTable[string, seq[NimNode]]()
   for stmt in body:
     var pragmas: NimNode  = newEmptyNode()
     if stmt.kind == nnkProcDef:
@@ -67,11 +67,15 @@ macro Controller*(class: typed, body: untyped): untyped =
         if pragma.kind == nnkCall:
           if pragma[0].eqIdent("useGuards"):
             for brk in pragma[1]:
-              if guards.hasKey($procName):
-                guards[$procName].add(ident($brk))
-              else:
-                guards[$procName] = @[ident($brk)]  
-      let thisDefined = anyIt(params[1..^1], it[1].kind != nnkEmpty and $it[1] == "BaseController")
+              let guardIdent = brk
+              if not guardsTb.hasKey($procName):
+                guardsTb[$procName] = newSeq[NimNode](pragma[1].len).filterIt(it.len > 0)
+              if guardIdent != nil:  
+                guardsTb[$procName].add(brk)
+      
+      for k, v in guardsTb:
+        echo k, " => ", v
+      let thisDefined = anyIt(params[1..^1], it[1].kind != nnkEmpty and $it[1] == $BaseController)
       # Nếu chưa có param nào (chỉ có return type), thì chèn this vào
       if not thisDefined:
         let thisParam = newIdentDefs(ident("this"), class)
@@ -99,14 +103,7 @@ macro Controller*(class: typed, body: untyped): untyped =
     let inst = new `classIdent`
     controllerRegistry[`classNameStr`] = cast[BaseController](inst)
     injector(inst)
-    var vvv = `guards`
-    for key, guardList in vvv.pairs:
-      let guardCalls = guardList.mapIt(it())
-      for instGuard in guardCalls:
-        if controllerRegistry[`classNameStr`].guards.hasKey(key):
-          controllerRegistry[`classNameStr`].guards[key].add(instGuard)
-        else:
-          controllerRegistry[`classNameStr`].guards[key] = @[instGuard]
+     
   result = newStmtList()
   result.add(outBody)
   result.add(register)

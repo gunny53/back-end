@@ -1,4 +1,4 @@
-import tables, macros, asyncdispatch
+import tables, macros
 
 type BaseSingleton* = ref object of RootObj
 
@@ -12,10 +12,9 @@ macro RegisterSingletons*(body: untyped): untyped =
     let bodyType = $body
     result.add quote do:
       let inst = new(`body`)
-      singletonContainer["singleton_" & `bodyType`] = new(`body`)
+      singletonContainer["singleton_" & `bodyType`] = inst
   else: discard
 
 template inject*(): BaseSingleton {.pragma.}
-template inject2*(): auto {.pragma.}
 macro Get*(path: static[string], body: untyped): untyped =
   result

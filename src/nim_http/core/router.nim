@@ -1,4 +1,4 @@
-import asynchttpserver, tables, macros, re, options, strutils, asyncdispatch, sequtils
+import asynchttpserver, tables, macros, re, options, strutils, asyncdispatch
 import controller, guard
 
 type
@@ -44,7 +44,11 @@ macro `/`*[T: BaseController](c: typedesc[T], handler: untyped): ControllerDeleg
       proc (this: BaseController): Future[void] {.gcsafe.} =
         let ctrl = cast[`ctrlSym`](this)
         `handler`(ctrl)
-    let guards = controllerRegistry[$`c`].guards[`methodName`]    
+    let guards = (
+      if controllerRegistry[$`c`].guards.hasKey(`methodName`):
+        controllerRegistry[$`c`].guards[`methodName`]
+       else: @[] 
+    )
     ControllerDelegate(
       instance: controllerRegistry[$`c`],
       handler:  hand,
@@ -100,8 +104,10 @@ proc process*(request: Request): Future[void] {.async.} =
           except GuardFailedError as e:
             await request.respond(Http401, e.msg)
         else:
-          await request.respond(Http400, "not found")
-  await request.respond(Http400, "not found")
+          await request.respond(Http400, $Http400)
+    else:
+      await request.respond(Http405, $Http405)
+  await request.respond(Http400, $Http400)
 
 template Get*    (route: RouteItem): untyped = register(HttpGet,     route)
 template Post*   (route: RouteItem): untyped = register(HttpPost,    route)
