@@ -4,8 +4,8 @@ import ./services/[user_service, log_service]
 import asynchttpserver
 
 type HomeController* = ref object of BaseController
-  userService* {.inject.}: UserService
-  logService*  {.inject.}: LogService
+  userService {.inject.}: UserService
+  logService  {.inject.}: LogService
 
 Controller(HomeController):
   proc index*() {.useGuards([AuthGuard, Guard]).} =

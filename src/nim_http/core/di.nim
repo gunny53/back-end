@@ -6,7 +6,7 @@ type BaseSingleton* = ref object of RootObj
 var singletonContainer* {.threadvar.}: Table[string, BaseSingleton]
 singletonContainer = initTable[string, BaseSingleton]()
 
-macro RegisterSingletons*(body: untyped): untyped =
+macro Injectable*(body: untyped): untyped =
   result = newStmtList()
   if body.kind == nnkIdent:
     let bodyType = $body
@@ -16,5 +16,6 @@ macro RegisterSingletons*(body: untyped): untyped =
   else: discard
 
 template inject*(): BaseSingleton {.pragma.}
-macro Get*(path: static[string], body: untyped): untyped =
-  result
+
+template singleton*() {.pragma.}
+template transient*() {.pragma.}
