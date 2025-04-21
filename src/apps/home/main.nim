@@ -1,4 +1,5 @@
 import ../../nim_http/core/[controller, di, utils, guard]
+import ../../libs/auth/auth_guard
 import ./services/[user_service, log_service]
 import asynchttpserver
 
