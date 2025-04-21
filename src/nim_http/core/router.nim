@@ -28,11 +28,12 @@ type
   GuardFailedError* = object of CatchableError
 
 # Hàm xử lý request, kiểm tra các guards, middleware, interceptors trước khi thực thi nghiệp vụ ở controller
-proc resolve*(this: RouteDetail, request: Request): Future[void] =
-  for guard in this.delegate.guards:
-    if not guard.canActivate(request):
-      raise newException(GuardFailedError, "Guard check failed: ")
-  this.delegate.instance.processRequest(request).invoke(this.delegate.handler).finallize()
+proc resolve*(this: RouteDetail, request: Request): Future[void] {.async.} =
+  if this.delegate.guards.len > 0:
+    for guard in this.delegate.guards:
+      if not guard.canActivate(request):
+        raise newException(GuardFailedError, "Guard check failed: ")
+  this.delegate.instance.processRequest(request).invoke(this.delegate.handler)
 
 macro `/`*[T: BaseController](c: typedesc[T], handler: untyped): ControllerDelegate =
   let ctrlSym    = c
@@ -45,8 +46,8 @@ macro `/`*[T: BaseController](c: typedesc[T], handler: untyped): ControllerDeleg
         let ctrl = cast[`ctrlSym`](this)
         `handler`(ctrl)
     let guards = (
-      if controllerRegistry[$`c`].guards.hasKey(`methodName`):
-        controllerRegistry[$`c`].guards[`methodName`]
+      if controllerRegistry[$`c`].guards.hasKey(`methodName` & "*"):
+        controllerRegistry[$`c`].guards[`methodName` & "*"]
        else: @[] 
     )
     ControllerDelegate(

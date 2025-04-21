@@ -14,13 +14,9 @@ proc send(this: BaseController, code: HttpCode, data: string) = discard this.req
 template Ok*        (content): untyped = this.send(Http200, "{\"message\": \"" & content & "\"}")
 template BadRequest*(content): untyped = this.send(Http400, "{\"message\": \"" & content & "\"}")
 
-proc invoke*(this: BaseController, handler: auto): BaseController =
+proc invoke*(this: BaseController, handler: auto) =
   let fn = proc (this: BaseController): Future[void] {.gcsafe, closure, async.} = await handler(this)
   discard fn(this)
-  return this
-
-proc finallize*(this: BaseController) =
-  this.request.reset()
 
 proc processRequest*(this: BaseController, req: Request): BaseController =
   this.request = req
@@ -73,8 +69,6 @@ macro Controller*(class: typed, body: untyped): untyped =
               if guardIdent != nil:  
                 guardsTb[$procName].add(brk)
       
-      for k, v in guardsTb:
-        echo k, " => ", v
       let thisDefined = anyIt(params[1..^1], it[1].kind != nnkEmpty and $it[1] == $BaseController)
       # Nếu chưa có param nào (chỉ có return type), thì chèn this vào
       if not thisDefined:
@@ -99,11 +93,17 @@ macro Controller*(class: typed, body: untyped): untyped =
       outBody.add(stmt)
 
   let classNameStr: string = $class
-  let register: NimNode    = quote do:
+  let register1: NimNode    = quote do:
     let inst = new `classIdent`
     controllerRegistry[`classNameStr`] = cast[BaseController](inst)
     injector(inst)
-     
   result = newStmtList()
   result.add(outBody)
-  result.add(register)
+  result.add(register1)
+  for k, guards in guardsTb:
+    for guard in guards:
+      result.add quote do:
+        let guardInst = new `guard`
+        if not controllerRegistry[`classNameStr`].guards.hasKey(`k`):
+          controllerRegistry[`classNameStr`].guards[`k`] = @[]
+        controllerRegistry[`classNameStr`].guards[`k`].add(cast[Guard](guardInst))
