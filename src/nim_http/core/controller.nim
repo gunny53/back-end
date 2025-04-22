@@ -3,8 +3,8 @@ import guard
 
 type BaseController* = ref object of RootObj
   request*: Request
-  params*:  Table[string, string]     = initTable[string, string]()
-  guards*:  Table[string, seq[Guard]] = initTable[string, seq[Guard]]()
+  params*:  TableRef[string, string]     = newTable[string, string]()
+  guards*:  TableRef[string, seq[Guard]] = newTable[string, seq[Guard]]()
 
 let controllerRegistry*: TableRef[string, BaseController] = newTable[string, BaseController]()
 
@@ -14,7 +14,7 @@ template Ok*        (content): untyped = this.send(Http200, "{\"message\": \"" &
 template BadRequest*(content): untyped = this.send(Http400, "{\"message\": \"" & content & "\"}")
 
 proc invoke*(this: BaseController, handler: auto) =
-  let fn = proc (this: BaseController): Future[void] {.gcsafe, closure, async.} = await handler(this)
+  let fn = proc (this: BaseController): Future[void] {.closure, async.} = await handler(this)
   discard fn(this)
 
 proc processRequest*(this: BaseController, req: Request): BaseController =
@@ -46,7 +46,7 @@ macro injector(inst: typed): untyped =
 macro Controller*(class: typed, body: untyped): untyped =
   let outBody:    NimNode = newStmtList()
   let classIdent: NimNode = ident($class)
-  var guardsTb:   Table[string, seq[NimNode]] = initTable[string, seq[NimNode]]()
+  let guardsTb:   TableRef[string, seq[NimNode]] = newTable[string, seq[NimNode]]()
   for stmt in body:
     var pragmas: NimNode  = newEmptyNode()
     if stmt.kind == nnkProcDef:

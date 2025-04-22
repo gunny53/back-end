@@ -3,24 +3,24 @@ import controller, guard, exception
 
 type
   # Lưu thông tin meta của route dưới dạng regex pattern
-  RoutePattern = object
+  RoutePattern = ref object
     raw*:        string
     regex*:      Regex
     paramNames*: seq[string]
 
   # Lưu thông tin chi tiết của 1 route
-  RouteDetail* = object
+  RouteDetail* = ref object
     httpMethod*: HttpMethod
     pattern*:    RoutePattern
     delegate*:   ControllerDelegate
 
   # Lưu thông tin của 1 route
-  RouteItem = object
+  RouteItem = ref object
     path:     string
     delegate: ControllerDelegate
 
   # Lưu thông tin của controller
-  ControllerDelegate = object
+  ControllerDelegate = ref object
     instance*: BaseController
     handler*:  proc (this: BaseController): Future[void] {.gcsafe.}
     guards*:   seq[Guard]
@@ -102,7 +102,7 @@ proc register(
   )
 
 # Hàm xử lý request tại tầng router
-proc process*(request: Request): Future[void] {.async.} =
+proc process*(request: Request): Future[void] =
   let (paramNames, key) = parseToRegex(request.url.path)
   if routeTree.hasKey(key):
     let route = routeTree[key]
@@ -112,12 +112,12 @@ proc process*(request: Request): Future[void] {.async.} =
         if matches.len == paramNames.len + 1:
           for i, name in paramNames:
             route.delegate.instance.params[name] = matches[i]
-          await route.resolve(request)
+          return route.resolve(request)
         else:
-          await request.respond(Http400, $Http400)
+          return request.respond(Http400, $Http400)
     else:
-      await request.respond(Http405, $Http405)
-  await request.respond(Http400, $Http400)
+      return request.respond(Http405, $Http405)
+  return request.respond(Http400, $Http400)
 
 template Get*    (route: RouteItem): untyped = register(HttpGet,     route)
 template Post*   (route: RouteItem): untyped = register(HttpPost,    route)
