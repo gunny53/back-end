@@ -61,12 +61,16 @@ macro Controller*(class: typed, body: untyped): untyped =
       for pragma in pragmas:
         if pragma.kind == nnkCall:
           if pragma[0].eqIdent("useGuards"):
-            for brk in pragma[1]:
-              let guardIdent = brk
-              if not guardsTb.hasKey($procName):
-                guardsTb[$procName] = newSeq[NimNode](pragma[1].len).filterIt(it.len > 0)
-              if guardIdent != nil:  
-                guardsTb[$procName].add(brk)
+            echo  pragma[1].kind
+            if pragma[1].kind == nnkIdent:
+              guardsTb[$procName] = @[pragma[1]]
+            else:  
+              for brk in pragma[1]:
+                let guardIdent = brk
+                if not guardsTb.hasKey($procName):
+                  guardsTb[$procName] = newSeq[NimNode](pragma[1].len).filterIt(it.len > 0)
+                if guardIdent != nil:  
+                  guardsTb[$procName].add(brk)
       
       let thisDefined = anyIt(params[1..^1], it[1].kind != nnkEmpty and $it[1] == $BaseController)
       # Nếu chưa có param nào (chỉ có return type), thì chèn this vào
