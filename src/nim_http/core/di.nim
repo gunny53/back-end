@@ -3,8 +3,7 @@ import tables, macros
 type BaseSingleton* = ref object of RootObj
 
 # Singleton Container toàn cục
-var singletonContainer* {.threadvar.}: Table[string, BaseSingleton]
-singletonContainer = initTable[string, BaseSingleton]()
+let singletonContainer*: TableRef[string, BaseSingleton] = newTable[string, BaseSingleton]()
 
 macro Injectable*(body: untyped): untyped =
   result = newStmtList()

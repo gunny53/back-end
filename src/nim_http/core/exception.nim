@@ -4,6 +4,7 @@ import asynchttpserver, asyncdispatch, json
 type HttpException* = ref object of CatchableError
   statusCode*: HttpCode
   message*:    string
+  
 method catch*(this: HttpException, req: Request): Future[void] {.base, async, gcsafe.} =
   if not req.headers.hasKey("Content-Type"):
     req.headers["Content-Type"] = "application/json"

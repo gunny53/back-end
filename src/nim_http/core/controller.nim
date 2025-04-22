@@ -6,8 +6,7 @@ type BaseController* = ref object of RootObj
   params*:  Table[string, string]     = initTable[string, string]()
   guards*:  Table[string, seq[Guard]] = initTable[string, seq[Guard]]()
 
-var controllerRegistry* {.threadvar.}: Table[string, BaseController]
-controllerRegistry = initTable[string, BaseController]()
+let controllerRegistry*: TableRef[string, BaseController] = newTable[string, BaseController]()
 
 proc send(this: BaseController, code: HttpCode, data: string) = discard this.request.respond(code, data)
 
