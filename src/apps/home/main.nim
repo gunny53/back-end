@@ -1,7 +1,6 @@
-import ../../nim_http/core/[controller, di, utils, guard]
+import ../../nim_http/core/[controller, di, guard]
 import ../../libs/auth/auth_guard
 import ./services/[user_service, log_service]
-import asynchttpserver
 
 type HomeController* = ref object of BaseController
   userService {.inject.}: UserService
@@ -11,5 +10,5 @@ Controller(HomeController):
   proc index*() {.useGuards(AuthGuard).} =
     Ok "Hello from HomeController! " & this.userService.name
 
-  proc about*() =
+  proc about*() {.useGuards(AuthGuard).} =
     Ok("Hello from HomeController! " & this.userService.name)

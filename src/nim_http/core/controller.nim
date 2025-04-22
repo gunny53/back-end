@@ -61,7 +61,6 @@ macro Controller*(class: typed, body: untyped): untyped =
       for pragma in pragmas:
         if pragma.kind == nnkCall:
           if pragma[0].eqIdent("useGuards"):
-            echo  pragma[1].kind
             if pragma[1].kind == nnkIdent:
               guardsTb[$procName] = @[pragma[1]]
             else:  
