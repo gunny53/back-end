@@ -25,8 +25,8 @@ type
     handler*:  proc (this: BaseController): Future[void] {.gcsafe.}
     guards*:   seq[Guard]
 
-var routeTree* {.threadvar.}: Table[string, RouteDetail]
-routeTree = initTable[string, RouteDetail]()
+var routeTree* {.threadvar.}: TableRef[string, RouteDetail]
+routeTree = newTable[string, RouteDetail]()
 
 # Hàm xử lý request, kiểm tra các guards, middleware, interceptors trước khi thực thi nghiệp vụ ở controller
 proc resolve*(this: RouteDetail, request: Request): Future[void] {.async.} =
