@@ -1,106 +1,35 @@
-import asynchttpserver, asyncdispatch
+import asynchttpserver, asyncdispatch, json
 
 # Base http exception
 type HttpException* = ref object of CatchableError
   statusCode*: HttpCode
   message*:    string
-method catch(this: HttpException, req: Request): Future[void] {.base, async, gcsafe.} =
-  await req.respond(this.statusCode, this.message, req.headers)
+method catch*(this: HttpException, req: Request): Future[void] {.base, async, gcsafe.} =
+  if not req.headers.hasKey("Content-Type"):
+    req.headers["Content-Type"] = "application/json"
+  let mess = %*{"statusCode": this.statusCode.int, "message": this.message}
+  await req.respond(this.statusCode, $mess, req.headers)
 
-# Bad request
-type BadRequestException* = ref object of HttpException
-method catch(this: BadRequestException, req: Request): Future[void] {.async, gcsafe.} =
-  await HttpException(this).catch(req)
-
-# Conflict exception
-type ConflictException* = ref object of HttpException
-method catch(this: ConflictException, req: Request): Future[void] {.async, gcsafe.} =
-  await HttpException(this).catch(req)
-
-# Forbidden
-type ForbiddenException* = ref object of HttpException
-method catch(this: ForbiddenException, req: Request): Future[void] {.async, gcsafe.} =
-  await HttpException(this).catch(req)
-
-# GatewayTimeoutException
-type GatewayTimeoutException* = ref object of HttpException
-method catch(this: GatewayTimeoutException, req: Request): Future[void] {.async, gcsafe.} =
-  await HttpException(this).catch(req)
-
-# GoneException
-type GoneException* = ref object of HttpException
-method catch(this: GoneException, req: Request): Future[void] {.async, gcsafe.} =
-  await HttpException(this).catch(req)
-
-# HttpVersionNotSupportedException  
-type HttpVersionNotSupportedException* = ref object of HttpException
-method catch(this: HttpVersionNotSupportedException, req: Request): Future[void] {.async, gcsafe.} =
-  await HttpException(this).catch(req)
-
-# ImATeapotException
-type ImATeapotException* = ref object of HttpException
-method catch(this: ImATeapotException, req: Request): Future[void] {.async, gcsafe.} =
-  await HttpException(this).catch(req)
-
-# InternalServerErrorException
-type InternalServerErrorException* = ref object of HttpException
-method catch(this: InternalServerErrorException, req: Request): Future[void] {.async, gcsafe.} =
-  await HttpException(this).catch(req)
-
-# MethodNotAllowedException
-type MethodNotAllowedException* = ref object of HttpException
-method catch(this: MethodNotAllowedException, req: Request): Future[void] {.async, gcsafe.} =
-  await HttpException(this).catch(req)    
-
-# MisdirectedException
-type MisdirectedException* = ref object of HttpException
-method catch(this: MisdirectedException, req: Request): Future[void] {.async, gcsafe.} =
-  await HttpException(this).catch(req)
-
-# NotAcceptableException
-type NotAcceptableException* = ref object of HttpException
-method catch(this: NotAcceptableException, req: Request): Future[void] {.async, gcsafe.} =
-  await HttpException(this).catch(req)  
-
-# NotFoundException
-type NotFoundException* = ref object of HttpException
-method catch(this: NotFoundException, req: Request): Future[void] {.async, gcsafe.} =
-  await HttpException(this).catch(req)    
-
-# NotImplementedException
-type NotImplementedException* = ref object of HttpException
-method catch(this: NotImplementedException, req: Request): Future[void] {.async, gcsafe.} =
-  await HttpException(this).catch(req)
-
-# PreconditionFailedException
-type PreconditionFailedException* = ref object of HttpException
-method catch(this: PreconditionFailedException, req: Request): Future[void] {.async, gcsafe.} =
-  await HttpException(this).catch(req)  
-
-# RequestTimeoutException
-type RequestTimeoutException* = ref object of HttpException
-method catch(this: RequestTimeoutException, req: Request): Future[void] {.async, gcsafe.} =
-  await HttpException(this).catch(req)   
-
-# ServiceUnavailableException
-type ServiceUnavailableException* = ref object of HttpException
-method catch(this: ServiceUnavailableException, req: Request): Future[void] {.async, gcsafe.} =
-  await HttpException(this).catch(req)
-
-# UnauthorizedException
-type UnauthorizedException* = ref object of HttpException
-method catch(this: UnauthorizedException, req: Request): Future[void] {.async, gcsafe.} =
-  await HttpException(this).catch(req)     
-
-# UnprocessableEntityException
-type UnprocessableEntityException* = ref object of HttpException
-method catch(this: UnprocessableEntityException, req: Request): Future[void] {.async, gcsafe.} =
-  await HttpException(this).catch(req) 
-
-# UnsupportedMediaTypeException
-type UnsupportedMediaTypeException* = ref object of HttpException
-method catch(this: UnsupportedMediaTypeException, req: Request): Future[void] {.async, gcsafe.} =
-  await HttpException(this).catch(req)
+type
+  BadRequestException*              = ref object of HttpException
+  ConflictException*                = ref object of HttpException
+  ForbiddenException*               = ref object of HttpException
+  GatewayTimeoutException*          = ref object of HttpException
+  GoneException*                    = ref object of HttpException
+  HttpVersionNotSupportedException* = ref object of HttpException
+  ImATeapotException*               = ref object of HttpException
+  InternalServerErrorException*     = ref object of HttpException
+  MethodNotAllowedException*        = ref object of HttpException
+  MisdirectedException*             = ref object of HttpException
+  NotAcceptableException*           = ref object of HttpException
+  NotFoundException*                = ref object of HttpException
+  NotImplementedException*          = ref object of HttpException
+  PreconditionFailedException*      = ref object of HttpException
+  RequestTimeoutException*          = ref object of HttpException
+  ServiceUnavailableException*      = ref object of HttpException
+  UnauthorizedException*            = ref object of HttpException
+  UnprocessableEntityException*     = ref object of HttpException
+  UnsupportedMediaTypeException*    = ref object of HttpException
 
 # Constants for HttpExceptions
 func UNAUTHORIZED*              (message: string): HttpException =            UnauthorizedException(statusCode: Http401, message: message)

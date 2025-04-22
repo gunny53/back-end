@@ -1,5 +1,5 @@
 import asynchttpserver, tables, macros, re, options, strutils, asyncdispatch
-import controller, guard
+import controller, guard, exception
 
 type
   # Lưu thông tin meta của route dưới dạng regex pattern
@@ -28,15 +28,19 @@ type
 var routeTree* {.threadvar.}: Table[string, RouteDetail]
 routeTree = initTable[string, RouteDetail]()
 
-type
-  GuardFailedError* = object of CatchableError
-
 # Hàm xử lý request, kiểm tra các guards, middleware, interceptors trước khi thực thi nghiệp vụ ở controller
 proc resolve*(this: RouteDetail, request: Request): Future[void] {.async.} =
   if this.delegate.guards.len > 0:
     for guard in this.delegate.guards:
-      if not guard.canActivate(request):
-        raise newException(GuardFailedError, "Guard check failed: ")
+      try:
+        discard guard.canActivate(request)
+      except HttpException as e:
+        await e.catch(request)
+        return
+      except CatchableError as e:
+        await request.respond(Http500, "Internal Server Error")
+        return
+
   this.delegate.instance.processRequest(request).invoke(this.delegate.handler)
 
 # Lưu thông tin function handler cho request, bao gồm controller instance, guards, handler function
@@ -108,10 +112,7 @@ proc process*(request: Request): Future[void] {.async.} =
         if matches.len == paramNames.len + 1:
           for i, name in paramNames:
             route.delegate.instance.params[name] = matches[i]
-          try:
-            await route.resolve(request)
-          except GuardFailedError as e:
-            await request.respond(Http401, e.msg)
+          await route.resolve(request)
         else:
           await request.respond(Http400, $Http400)
     else:
