@@ -6,7 +6,7 @@ type
   RoutePattern = ref object
     raw*:        string
     regex*:      Regex
-    paramNames*: seq[string]
+    paramSegments*: seq[string]
 
   # Lưu thông tin chi tiết của 1 route
   RouteDetail* = ref object
@@ -22,24 +22,17 @@ type
   # Lưu thông tin của controller
   ControllerDelegate = ref object
     instance*: BaseController
-    handler*:  proc (this: BaseController): Future[void] {.gcsafe.}
+    handler*:  proc (this: BaseController): Future[void] {.gcsafe, closure.}
     guards*:   seq[Guard]
 
-var routeTree* {.threadvar.}: TableRef[string, RouteDetail]
+var routeTree {.threadvar.}: TableRef[string, RouteDetail]
 routeTree = newTable[string, RouteDetail]()
 
 # Hàm xử lý request, kiểm tra các guards, middleware, interceptors trước khi thực thi nghiệp vụ ở controller
 proc resolve*(this: RouteDetail, request: Request): Future[void] {.async.} =
   if this.delegate.guards.len > 0:
     for guard in this.delegate.guards:
-      try:
-        discard guard.canActivate(request)
-      except HttpException as e:
-        await e.catch(request)
-        return
-      except CatchableError as e:
-        await request.respond(Http500, "Internal Server Error")
-        return
+      discard guard.canActivate(request)
 
   this.delegate.instance.processRequest(request).invoke(this.delegate.handler)
 
@@ -49,13 +42,13 @@ macro `/`*[T: BaseController](ctlClass: typedesc[T], handler: untyped): Controll
   let methodName = $handler
   result         = quote do:
     let hand =
-      proc (this: BaseController): Future[void] {.gcsafe.} =
+      proc (this: BaseController): Future[void] {.gcsafe, closure.} =
         let ctrl = cast[`ctrlSym`](this)
         `handler`(ctrl)
     let guards = (
       if controllerRegistry[$`ctlClass`].guards.hasKey(`methodName` & "*"):
-        controllerRegistry[$`ctlClass`].guards[`methodName` & "*"]
-       else: @[] 
+         controllerRegistry[$`ctlClass`].guards[`methodName` & "*"]
+      else: @[] 
     )
     ControllerDelegate(
       instance: controllerRegistry[$`ctlClass`],
@@ -71,23 +64,22 @@ proc `->`*(path: string, delegate: ControllerDelegate): RouteItem =
 proc parseToRegex(path: string): (seq[string], string) =
   var 
     regexStr                = "^"
-    paramNames: seq[string] = @[]
+    paramSegments: seq[string] = @[]
   let parts = path.strip(chars = {'/'}).split("/")
   for part in parts:
     if part.startsWith(":"):
       regexStr.add("/([^/]+)")
       let name = part[1..^1]
-      assert name notin paramNames, "Parameter `" & name & "` already exists in route pattern."
-      paramNames.add(name)
+      paramSegments.add(name)
     else:
       regexStr.add("/" & part)
   regexStr.add("$")
-  result = (paramNames, regexStr)
+  return (paramSegments, regexStr)
 
 # Hàm lưu thông tin của url (đã chuyển đổi sang regex pattern), bao gồm params binds
 proc parseRoutePattern(pattern: string): (RoutePattern, string) =
-  let (paramNames, regexStr) = parseToRegex(pattern)
-  result = (RoutePattern(raw: pattern, regex: re(regexStr), paramNames: paramNames), regexStr)
+  let (paramSegments, regexStr) = parseToRegex(pattern)
+  result = (RoutePattern(raw: pattern, regex: re(regexStr), paramSegments: paramSegments), regexStr)
 
 # Đăng ký route
 proc register(
@@ -103,25 +95,22 @@ proc register(
 
 # Hàm xử lý request tại tầng router
 proc process*(request: Request): Future[void] =
-  let (paramNames, key) = parseToRegex(request.url.path)
-  if routeTree.hasKey(key):
-    let route = routeTree[key]
-    if route.httpMethod == request.reqMethod:
-      var matches: seq[string] = newSeq[string](paramNames.len + 1)
-      if match(request.url.path, route.pattern.regex, matches):
-        if matches.len == paramNames.len + 1:
-          for i, name in paramNames:
+  for _, route in routeTree.pairs:
+    if match(request.url.path, route.pattern.regex):
+      if route.httpMethod == request.reqMethod:
+        var matches = newSeq[string](route.pattern.paramSegments.len + 1)
+        if match(request.url.path, route.pattern.regex, matches):
+          for i, name in route.pattern.paramSegments:
             route.delegate.instance.params[name] = matches[i]
           return route.resolve(request)
-        else:
-          return request.respond(Http400, $Http400)
-    else:
-      return request.respond(Http405, $Http405)
-  return request.respond(Http400, $Http400)
+      else: raise METHOD_NOT_ALLOWED()
+  raise NOT_FOUND()
 
-template Get*    (route: RouteItem): untyped = register(HttpGet,     route)
-template Post*   (route: RouteItem): untyped = register(HttpPost,    route)
-template Put*    (route: RouteItem): untyped = register(HttpPut,     route)
-template Patch*  (route: RouteItem): untyped = register(HttpPatch,   route)
-template Options*(route: RouteItem): untyped = register(HttpOptions, route)
-template Delete* (route: RouteItem): untyped = register(HttpDelete,  route)
+template Get*     (route: RouteItem): untyped = register(HttpGet,     route)
+template Post*    (route: RouteItem): untyped = register(HttpPost,    route)
+template Put*     (route: RouteItem): untyped = register(HttpPut,     route)
+template Patch*   (route: RouteItem): untyped = register(HttpPatch,   route)
+template Options* (route: RouteItem): untyped = register(HttpOptions, route)
+template Delete*  (route: RouteItem): untyped = register(HttpDelete,  route)
+template Trace*   (route: RouteItem): untyped = register(HttpTrace,   route)
+template Connect* (route: RouteItem): untyped = register(HttpConnect, route)

@@ -12,6 +12,10 @@ proc send(this: BaseController, code: HttpCode, data: string) = discard this.req
 
 template Ok*        (content): untyped = this.send(Http200, "{\"message\": \"" & content & "\"}")
 template BadRequest*(content): untyped = this.send(Http400, "{\"message\": \"" & content & "\"}")
+template NoContent* ():        untyped = this.request.respond(Http204)
+template Created*(content):    untyped = this.send(Http201, "{\"message\": \"" & content & "\"}")
+template Forbidden*(content):  untyped = this.send(Http403, "{\"message\": \"" & content & "\"}")
+template NotFound*(content):   untyped = this.send(Http404, "{\"message\": \"" & content & "\"}")
 
 proc invoke*(this: BaseController, handler: auto) =
   let fn = proc (this: BaseController): Future[void] {.closure, async.} = await handler(this)
