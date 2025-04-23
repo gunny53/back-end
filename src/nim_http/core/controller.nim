@@ -63,7 +63,11 @@ macro Controller*(class: typed, body: untyped): untyped =
       let procBody    = stmt[6]  # Thân hàm
 
       for pragma in pragmas:
+        if pragma.kind == nnkIdent:
+          discard # cần triển khai kiểm tra nếu chỉ khai báo là .get. thì mặc định sẽ hiểu path là "/"
         if pragma.kind == nnkCall:
+          if pragma[0].eqIdent("get"):
+            echo pragma[1] #todo cần đăng ký route ở đây
           if pragma[0].eqIdent("useGuards"):
             if pragma[1].kind == nnkIdent:
               guardsTb[$procName] = @[pragma[1]]
@@ -113,3 +117,13 @@ macro Controller*(class: typed, body: untyped): untyped =
         if not controllerRegistry[`classNameStr`].guards.hasKey(`k`):
           controllerRegistry[`classNameStr`].guards[`k`] = @[]
         controllerRegistry[`classNameStr`].guards[`k`].add(cast[Guard](guardInst))
+
+template get*    (path: string = "/") {.pragma.}
+template post*   (path: string = "/") {.pragma.}
+template put*    (path: string = "/") {.pragma.}
+template patch*  (path: string = "/") {.pragma.}
+template delete* (path: string = "/") {.pragma.}
+template trace*  (path: string = "/") {.pragma.}
+template connect*(path: string = "/") {.pragma.}
+template options*(path: string = "/") {.pragma.}
+template head*   (path: string = "/") {.pragma.}
