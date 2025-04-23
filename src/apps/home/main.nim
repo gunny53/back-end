@@ -10,5 +10,5 @@ Controller(HomeController):
   proc index*() {.useGuards(AuthGuard).} =
     Ok "Hello from HomeController! " & this.userService.name
 
-  proc about*() {.useGuards(AuthGuard).} =
+  proc about*() =
     Ok("Hello from HomeController! " & this.userService.name)

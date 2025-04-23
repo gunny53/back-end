@@ -38,12 +38,11 @@ proc resolve*(this: RouteDetail, request: Request): Future[void] {.async.} =
 
 # Lưu thông tin function handler cho request, bao gồm controller instance, guards, handler function
 macro `/`*[T: BaseController](ctlClass: typedesc[T], handler: untyped): ControllerDelegate =
-  let ctrlSym    = ctlClass
   let methodName = $handler
   result         = quote do:
     let hand =
       proc (this: BaseController): Future[void] {.gcsafe, closure.} =
-        let ctrl = cast[`ctrlSym`](this)
+        let ctrl = cast[`ctlClass`](this)
         `handler`(ctrl)
     let guards = (
       if controllerRegistry[$`ctlClass`].guards.hasKey(`methodName` & "*"):
@@ -63,7 +62,7 @@ proc `->`*(path: string, delegate: ControllerDelegate): RouteItem =
 # Hàm hỗ trợ chuyển đổi url path string sang regex
 proc parseToRegex(path: string): (seq[string], string) =
   var 
-    regexStr                = "^"
+    regexStr                   = "^"
     paramSegments: seq[string] = @[]
   let parts = path.strip(chars = {'/'}).split("/")
   for part in parts:
