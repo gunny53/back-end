@@ -1,5 +1,5 @@
 import asynchttpserver, asyncdispatch, strutils
-import router
+import controller
 import exception
 
 type NimHttpApplicationErrorHandle* = ref object of RootObj

@@ -1,6 +1,6 @@
 import nim_http/core/app
 import libs/error/handle
-import apps/home/routes
+import apps/home/main
 
 let settings         = NimHttpApplicationSettings()
 settings.host        = "127.0.0.1"

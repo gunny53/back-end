@@ -3,7 +3,7 @@ import controller, guard, exception
 
 type
   # Lưu thông tin meta của route dưới dạng regex pattern
-  RoutePattern = ref object
+  RoutePattern* = ref object
     raw*:        string
     regex*:      Regex
     paramSegments*: seq[string]
@@ -15,12 +15,12 @@ type
     delegate*:   ControllerDelegate
 
   # Lưu thông tin của 1 route
-  RouteItem = ref object
+  RouteItem* = ref object
     path:     string
     delegate: ControllerDelegate
 
   # Lưu thông tin của controller
-  ControllerDelegate = ref object
+  ControllerDelegate* = ref object
     instance*: BaseController
     handler*:  proc (this: BaseController): Future[void] {.gcsafe, closure.}
     guards*:   seq[Guard]
