@@ -47,6 +47,6 @@ template QuerySeq*[T](key: static[string]): seq[T] =
 template Query*[T](key: static[string], default: T): T =
   QueryOpt[T](key).getOrElse(default)
 
-template Param*(key: static[string]): string =
+template Param*(key: string): int =
   # assert(not this.params.hasKey(key), "❌ param with key `" & key & "` not found")
-  this.params[key]
+  cast[int](this.params[key])

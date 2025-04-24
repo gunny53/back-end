@@ -1,4 +1,4 @@
-import macros, asyncdispatch, asynchttpserver, macrocache, tables, sequtils, di, strutils
+import macros, asyncdispatch, asynchttpserver, macrocache, tables, sequtils, di, strutils, utils
 import guard, re, exception
 
 type BaseController* = ref object of RootObj
@@ -217,10 +217,18 @@ macro Controller*(class: typed, body: untyped): untyped =
       let annotations = stmt[5]  # Annotations
       let procBody    = stmt[6]  # Thân hàm
       let thisDefined = anyIt(params[1..^1], it[1].kind != nnkEmpty and $it[1] == $BaseController)
+
       # Nếu chưa có param nào (chỉ có return type), thì chèn this vào
       if not thisDefined:
         let thisParam = newIdentDefs(ident("this"), class)
         let newParams = nnkFormalParams.newTree(params[0], thisParam)
+
+        for param in params:
+          if param.kind != nnkEmpty:
+            if param.kind == nnkIdentDefs:
+              let i = newIdentDefs(ident($param[0]), ident($param[1]), newLit(Param($param[0])))
+              newParams.add(i)
+        
         for i in 2..<params[0].len:
           newParams.add(params[0][i])
         let newProc: NimNode = nnkProcDef.newTree(
