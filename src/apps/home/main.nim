@@ -7,8 +7,11 @@ type HomeController* = ref object of BaseController
   logService  {.inject.}: LogService
 
 Controller(HomeController):
-  proc index*() {.get("/index"), useGuards(AuthGuard).} =
+  proc index() {.get("/index"), useGuards(AuthGuard).} =
     Ok "Hello from HomeController! " & this.userService.name
 
-  proc about*() =
-    Ok("Hello from HomeController! " & this.userService.name)
+  proc users() {.get("/users/:id").} =
+    Ok("Hello from users! " & this.userService.name)
+
+  proc accounts() {.get("/account/:id").} =
+    Ok("Hello from accounts! " & this.userService.name)  

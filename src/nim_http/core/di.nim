@@ -2,8 +2,8 @@ import tables, macros
 
 type BaseSingleton* = ref object of RootObj
 
-# Singleton Container toàn cục
-let singletonContainer*: TableRef[string, BaseSingleton] = newTable[string, BaseSingleton]()
+# Singleton CONTAINER toàn cục
+let singletonCONTAINER*: TableRef[string, BaseSingleton] = newTable[string, BaseSingleton]()
 
 macro Injectable*(body: untyped): untyped =
   result = newStmtList()
@@ -11,7 +11,7 @@ macro Injectable*(body: untyped): untyped =
     let bodyType = $body
     result.add quote do:
       let inst = new(`body`)
-      singletonContainer["singleton_" & `bodyType`] = inst
+      singletonCONTAINER["singleton_" & `bodyType`] = inst
   else: discard
 
 template inject*(): BaseSingleton {.pragma.}

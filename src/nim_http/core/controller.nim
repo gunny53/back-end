@@ -6,7 +6,7 @@ type BaseController* = ref object of RootObj
   params*:  TableRef[string, string]     = newTable[string, string]()
   guards*:  TableRef[string, seq[Guard]] = newTable[string, seq[Guard]]()
 
-let controllerRegistry*: TableRef[string, BaseController] = newTable[string, BaseController]()
+let CONTAINER: TableRef[string, BaseController] = newTable[string, BaseController]()
 
 proc send(this: BaseController, code: HttpCode, data: string) = discard this.request.respond(code, data)
 
@@ -25,12 +25,11 @@ proc processRequest*(this: BaseController, req: Request): BaseController =
   this.request = req
   return this
 
-
 type
   # Lưu thông tin meta của route dưới dạng regex pattern
   RoutePattern* = ref object
-    raw*:        string
-    regex*:      Regex
+    raw*:           string
+    regex*:         Regex
     paramSegments*: seq[string]
 
   # Lưu thông tin chi tiết của 1 route
@@ -58,11 +57,10 @@ proc resolve*(this: RouteDetail, request: Request): Future[void] {.async.} =
   if this.delegate.guards.len > 0:
     for guard in this.delegate.guards:
       discard guard.canActivate(request)
-
   this.delegate.instance.processRequest(request).invoke(this.delegate.handler)
 
 # Lưu thông tin function handler cho request, bao gồm controller instance, guards, handler function
-macro `/`*[T: BaseController](ctlClass: typedesc[T], handler: untyped): ControllerDelegate =
+macro mix[T: BaseController](ctlClass: typedesc[T], handler: untyped): ControllerDelegate =
   let methodName = $handler
   result         = quote do:
     let hand =
@@ -70,19 +68,15 @@ macro `/`*[T: BaseController](ctlClass: typedesc[T], handler: untyped): Controll
         let ctrl = cast[`ctlClass`](this)
         `handler`(ctrl)
     let guards = (
-      if controllerRegistry[$`ctlClass`].guards.hasKey(`methodName` & "*"):
-         controllerRegistry[$`ctlClass`].guards[`methodName` & "*"]
+      if CONTAINER[$`ctlClass`].guards.hasKey(`methodName`):
+         CONTAINER[$`ctlClass`].guards[`methodName`]
       else: @[] 
     )
     ControllerDelegate(
-      instance: controllerRegistry[$`ctlClass`],
+      instance: CONTAINER[$`ctlClass`],
       handler:  hand,
       guards:   guards
     )
-
-# Lưu thông tin của url path sẽ mapping với Controller xử lý nghiệp vụ
-proc `->`*(path: string, delegate: ControllerDelegate): RouteItem =
-  RouteItem(path: path, delegate: delegate)  
 
 # Hàm hỗ trợ chuyển đổi url path string sang regex
 proc parseToRegex(path: string): (seq[string], string) =
@@ -111,8 +105,7 @@ proc register(
   route:      RouteItem
 ) =
   let (pattern, key) = parseRoutePattern(route.path)
-  echo key
-  routeTree[key] = RouteDetail(
+  routeTree[key]     = RouteDetail(
     httpMethod: httpMethod,
     pattern:    pattern,
     delegate:   route.delegate
@@ -131,15 +124,14 @@ proc process*(request: Request): Future[void] =
       else: raise METHOD_NOT_ALLOWED()
   raise NOT_FOUND()
 
-template Get*     (route: RouteItem): untyped = register(HttpGet,     route)
-template Post*    (route: RouteItem): untyped = register(HttpPost,    route)
-template Put*     (route: RouteItem): untyped = register(HttpPut,     route)
-template Patch*   (route: RouteItem): untyped = register(HttpPatch,   route)
-template Options* (route: RouteItem): untyped = register(HttpOptions, route)
-template Delete*  (route: RouteItem): untyped = register(HttpDelete,  route)
-template Trace*   (route: RouteItem): untyped = register(HttpTrace,   route)
-template Connect* (route: RouteItem): untyped = register(HttpConnect, route)
-
+template Get*    (route: RouteItem): untyped = register(HttpGet,     route)
+template Post*   (route: RouteItem): untyped = register(HttpPost,    route)
+template Put*    (route: RouteItem): untyped = register(HttpPut,     route)
+template Patch*  (route: RouteItem): untyped = register(HttpPatch,   route)
+template Options*(route: RouteItem): untyped = register(HttpOptions, route)
+template Delete* (route: RouteItem): untyped = register(HttpDelete,  route)
+template Trace*  (route: RouteItem): untyped = register(HttpTrace,   route)
+template Connect*(route: RouteItem): untyped = register(HttpConnect, route)
 
 macro injector(inst: typed): untyped =
   let
@@ -159,39 +151,71 @@ macro injector(inst: typed): untyped =
                   let fieldTypeStr = $node[1]
                   let fieldType    = ident(fieldTypeStr)
                   result.add quote do:
-                    let rawService     = singletonContainer["singleton_" & `fieldTypeStr`]
+                    let rawService     = singletonCONTAINER["singleton_" & `fieldTypeStr`]
                     let service        = cast[`fieldType`](rawService)
                     `inst`.`fieldName` = service
 
+macro detectGuards(outBody: untyped, class: typed): untyped =
+  result           = newStmtList()
+  let classNameStr = $class
+  for stmt in outBody:
+    if stmt.kind == nnkProcDef:
+      let procName    = stmt[0]  # Tên hàm
+      let pragmas     = stmt[4]  # Giữ pragmas gốc
+      let procNameStr = ($procName).strip(chars = {'*'})
+      for pragma in pragmas:
+        if pragma.kind == nnkIdent:
+          discard # cần triển khai kiểm tra nếu chỉ khai báo là .get. thì mặc định sẽ hiểu path là "/"
+        if pragma.kind == nnkCall:
+          if pragma[0].eqIdent("useGuards"):
+            if pragma[1].kind == nnkIdent:
+              let ide = pragma[1]
+              result.add quote do:
+                let guardInst = new `ide`
+                if not CONTAINER[`classNameStr`].guards.hasKey(`procNameStr`):
+                  CONTAINER[`classNameStr`].guards[`procNameStr`] = @[]
+                CONTAINER[`classNameStr`].guards[`procNameStr`].add(cast[Guard](guardInst))
+            else:
+              for brk in pragma[1]:
+                result.add quote do:
+                  let guardInst = new `brk`
+                  if not CONTAINER[`classNameStr`].guards.hasKey(`procNameStr`):
+                    CONTAINER[`classNameStr`].guards[`procNameStr`] = @[]
+                  CONTAINER[`classNameStr`].guards[`procNameStr`].add(cast[Guard](guardInst))
+
+macro detectRoutes(outBody: untyped, class: typed): untyped =
+  result = newStmtList()
+  for stmt in outBody:
+    if stmt.kind == nnkProcDef:
+      let procName        = stmt[0]  # Tên hàm
+      let pragmas         = stmt[4]  # Giữ pragmas gốc
+      let procNameStr     = ($procName).strip(chars = {'*'})
+      let procNameStriped = ident(procNameStr)
+      for pragma in pragmas:
+        if pragma.kind == nnkIdent:
+          let path = "/"
+          if pragma.eqIdent("get"):
+            result.add quote do: Get(RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`)))
+        if pragma.kind == nnkCall:
+          let path = $pragma[1]
+          if pragma[0].eqIdent("get"):
+            result.add quote do: Get(RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`)))
+          elif pragma[0].eqIdent("post"):
+            result.add quote do: Post(RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`)))
+
 macro Controller*(class: typed, body: untyped): untyped =
-  let outBody:    NimNode = newStmtList()
-  let classIdent: NimNode = ident($class)
-  let guardsTb:   TableRef[string, seq[NimNode]] = newTable[string, seq[NimNode]]()
-  let classNameStr: string = $class
+  let outBody:      NimNode = newStmtList()
+  let classIdent:   NimNode = ident($class)
+  let classNameStr: string  = $class
   for stmt in body:
-    var pragmas: NimNode  = newEmptyNode()
     if stmt.kind == nnkProcDef:
       let procName    = stmt[0]  # Tên hàm
       let generic     = stmt[1]  # Generic params (nếu có)
       let patterns    = stmt[2]  # Pattern params (rarely used)
       let params      = stmt[3]  # Đã patch "this"
-      pragmas         = stmt[4]  # Giữ pragmas gốc
+      let pragmas     = stmt[4]  # Giữ pragmas gốc
       let annotations = stmt[5]  # Annotations
       let procBody    = stmt[6]  # Thân hàm
-
-      for pragma in pragmas:
-        if pragma.kind == nnkCall:
-          if pragma[0].eqIdent("useGuards"):
-            if pragma[1].kind == nnkIdent:
-              guardsTb[$procName] = @[pragma[1]]
-            else:  
-              for brk in pragma[1]:
-                let guardIdent = brk
-                if not guardsTb.hasKey($procName):
-                  guardsTb[$procName] = newSeq[NimNode](pragma[1].len).filterIt(it.len > 0)
-                if guardIdent != nil:  
-                  guardsTb[$procName].add(brk)
-      
       let thisDefined = anyIt(params[1..^1], it[1].kind != nnkEmpty and $it[1] == $BaseController)
       # Nếu chưa có param nào (chỉ có return type), thì chèn this vào
       if not thisDefined:
@@ -199,7 +223,6 @@ macro Controller*(class: typed, body: untyped): untyped =
         let newParams = nnkFormalParams.newTree(params[0], thisParam)
         for i in 2..<params[0].len:
           newParams.add(params[0][i])
-
         let newProc: NimNode = nnkProcDef.newTree(
           procName,     # Tên hàm
           generic,      # Generic params (nếu có)
@@ -214,38 +237,16 @@ macro Controller*(class: typed, body: untyped): untyped =
         outBody.add(stmt)
     else:
       outBody.add(stmt)
-
-  let register1: NimNode    = quote do:
-    let inst = new `classIdent`
-    controllerRegistry[`classNameStr`] = cast[BaseController](inst)
-    injector(inst)
   result = newStmtList()
+  let init: NimNode = quote do:
+    let inst = new `classIdent`
+    CONTAINER[`classNameStr`] = cast[BaseController](inst)
+    injector(inst)
+    detectGuards(`outBody`, `class`)
+    detectRoutes(`outBody`, `class`)
+
   result.add(outBody)
-  result.add(register1)
-  for k, guards in guardsTb:
-    for guard in guards:
-      result.add quote do:
-        let guardInst = new `guard`
-        if not controllerRegistry[`classNameStr`].guards.hasKey(`k`):
-          controllerRegistry[`classNameStr`].guards[`k`] = @[]
-        controllerRegistry[`classNameStr`].guards[`k`].add(cast[Guard](guardInst))
-  let routeBody:  NimNode = newStmtList()
-  for stmt in outBody:
-    if stmt.kind == nnkProcDef:
-      let procName = stmt[0]  # Tên hàm
-      let pragmas  = stmt[4]  # Giữ pragmas gốc
-      for pragma in pragmas:
-        if pragma.kind == nnkIdent:
-          discard # cần triển khai kiểm tra nếu chỉ khai báo là .get. thì mặc định sẽ hiểu path là "/"
-        if pragma.kind == nnkCall:
-          if pragma[0].eqIdent("get"):
-            let procNameStriped = ident(($procName).strip(chars = {'*'}))
-            let path = $pragma[1]
-            routeBody.add quote do:
-              var z: ControllerDelegate =  `class` / `procNameStriped`
-              let r2: RouteItem = `path` -> z
-              Get(r2)
-  result.add(routeBody)
+  result.add(init)
 
 template get*    (path: string = "/") {.pragma.}
 template post*   (path: string = "/") {.pragma.}

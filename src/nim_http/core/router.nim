@@ -45,12 +45,12 @@ macro `/`*[T: BaseController](ctlClass: typedesc[T], handler: untyped): Controll
         let ctrl = cast[`ctlClass`](this)
         `handler`(ctrl)
     let guards = (
-      if controllerRegistry[$`ctlClass`].guards.hasKey(`methodName` & "*"):
-         controllerRegistry[$`ctlClass`].guards[`methodName` & "*"]
+      if CONTAINER[$`ctlClass`].guards.hasKey(`methodName` & "*"):
+         CONTAINER[$`ctlClass`].guards[`methodName` & "*"]
       else: @[] 
     )
     ControllerDelegate(
-      instance: controllerRegistry[$`ctlClass`],
+      instance: CONTAINER[$`ctlClass`],
       handler:  hand,
       guards:   guards
     )
