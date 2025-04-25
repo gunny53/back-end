@@ -1,4 +1,4 @@
-import ../../nim_http/core/[controller, di, guard, utils]
+import ../../nim_http/core/[controller, di, guard]
 import ../../libs/auth/auth_guard
 import ./services/[user_service, log_service]
 
@@ -10,9 +10,8 @@ Controller(HomeController):
   proc index() {.get("/index"), useGuards(AuthGuard).} =
     Ok "Hello from HomeController! " & this.userService.name
 
-  proc users(id: int = Param("id")) {.get("/users/:id").} =
-    echo id
-    Ok("Hello from users! " & this.userService.name)
+  proc users(id {.param.}: int) {.get("/users/:id").} =
+    Ok("Hello from users! " & this.userService.name & " id = " & $id)
 
   proc accounts() {.get("/account/:id").} =
     Ok("Hello from accounts! " & this.userService.name)  

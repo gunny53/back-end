@@ -215,9 +215,9 @@ macro Controller*(class: typed, body: untyped): untyped =
       let params      = stmt[3]  # Đã patch "this"
       let pragmas     = stmt[4]  # Giữ pragmas gốc
       let annotations = stmt[5]  # Annotations
-      let procBody    = stmt[6]  # Thân hàm
+      let procBodyOriginal    = stmt[6]  # Thân hàm
       let thisDefined = anyIt(params[1..^1], it[1].kind != nnkEmpty and $it[1] == $BaseController)
-
+      let procBodyNew = newStmtList()
       # Nếu chưa có param nào (chỉ có return type), thì chèn this vào
       if not thisDefined:
         let thisParam = newIdentDefs(ident("this"), class)
@@ -226,9 +226,24 @@ macro Controller*(class: typed, body: untyped): untyped =
         for param in params:
           if param.kind != nnkEmpty:
             if param.kind == nnkIdentDefs:
-              let i = newIdentDefs(ident($param[0]), ident($param[1]), newLit(Param($param[0])))
-              newParams.add(i)
-        
+              if param[0].kind == nnkPragmaExpr:
+                let identName  = param[0][0]        # Tên biến
+                let identType  = param[1]           # Kiểu biến
+                let pragmaNode = param[0][1]
+                # Bước 1: tạo khai báo biến không khởi tạo (giá trị tạm thời)
+                let i = newIdentDefs(ident($identName), ident($identType), newLit(0))
+                newParams.add(i)
+                # Bước 2: nếu có pragma {.param.}, generate code để gán từ this.params
+                let identNameStr = $identName
+                if pragmaNode.len > 0 and pragmaNode[0].eqIdent("param"):
+                  let assignStmt = quote do:
+                    let `identName` = parseInt(this.params[`identNameStr`])  # hoặc parseX nếu cần
+                  procBodyNew.add(assignStmt)
+                # sau này bạn có thể xử lý thêm {.query.}, {.body.}, etc...
+              else:
+                let i = newIdentDefs(ident($param[0]), ident($param[1]), newLit(0))
+                newParams.add(i)
+        procBodyNew.add(procBodyOriginal)
         for i in 2..<params[0].len:
           newParams.add(params[0][i])
         let newProc: NimNode = nnkProcDef.newTree(
@@ -238,7 +253,7 @@ macro Controller*(class: typed, body: untyped): untyped =
           newParams,    # Đã patch "this"
           pragmas,      # Giữ pragmas gốc
           annotations,  # Annotations
-          procBody      # Thân hàm
+          procBodyNew      # Thân hàm
         )
         outBody.add(newProc)
       else:
@@ -265,3 +280,5 @@ template trace*  (path: string = "/") {.pragma.}
 template connect*(path: string = "/") {.pragma.}
 template options*(path: string = "/") {.pragma.}
 template head*   (path: string = "/") {.pragma.}
+template param*  (key: string = ""){.pragma.}
+template query*  (key: string = ""){.pragma.}
