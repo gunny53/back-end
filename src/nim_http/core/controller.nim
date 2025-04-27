@@ -1,21 +1,22 @@
-import macros, asyncdispatch, asynchttpserver, macrocache, tables, sequtils, di, strutils, utils
+import macros, asyncdispatch, asynchttpserver, macrocache, tables, sequtils, di, strutils
 import guard, re, exception
 
 type BaseController* = ref object of RootObj
   request*: Request
   params*:  TableRef[string, string]     = newTable[string, string]()
   guards*:  TableRef[string, seq[Guard]] = newTable[string, seq[Guard]]()
+  isHtml: bool # TODO làm 1 response header content type để trả về kiểu tương ứng
 
 let CONTAINER: TableRef[string, BaseController] = newTable[string, BaseController]()
 
 proc send(this: BaseController, code: HttpCode, data: string): void = discard this.request.respond(code, data)
 
-template Ok*        (content): untyped = this.send(Http200, "{\"message\": \"" & content & "\"}")
-template BadRequest*(content): untyped = this.send(Http400, "{\"message\": \"" & content & "\"}")
+template Ok*        (content): untyped = this.send(Http200, content)
+template BadRequest*(content): untyped = this.send(Http400, content)
 template NoContent* ():        untyped = this.request.respond(Http204)
-template Created*(content):    untyped = this.send(Http201, "{\"message\": \"" & content & "\"}")
-template Forbidden*(content):  untyped = this.send(Http403, "{\"message\": \"" & content & "\"}")
-template NotFound*(content):   untyped = this.send(Http404, "{\"message\": \"" & content & "\"}")
+template Created*(content):    untyped = this.send(Http201, content)
+template Forbidden*(content):  untyped = this.send(Http403, content)
+template NotFound*(content):   untyped = this.send(Http404, content)
 
 proc invoke*(this: BaseController, handler: auto): Future[void] =
   let fn = proc (this: BaseController): Future[void] {.closure, async.} = handler(this)
@@ -133,6 +134,7 @@ template Delete* (route: RouteItem): untyped = register(HttpDelete,  route)
 template Trace*  (route: RouteItem): untyped = register(HttpTrace,   route)
 template Connect*(route: RouteItem): untyped = register(HttpConnect, route)
 
+# Hàm phát hiện và inject di
 macro injector(inst: typed): untyped =
   let
     typ     = inst.getTypeInst
@@ -154,7 +156,7 @@ macro injector(inst: typed): untyped =
                     let rawService     = singletonCONTAINER["singleton_" & `fieldTypeStr`]
                     let service        = cast[`fieldType`](rawService)
                     `inst`.`fieldName` = service
-
+# Hàm phát hiện guards
 macro detectGuards(outBody: untyped, class: typed): untyped =
   result           = newStmtList()
   let classNameStr = $class
@@ -182,7 +184,7 @@ macro detectGuards(outBody: untyped, class: typed): untyped =
                   if not CONTAINER[`classNameStr`].guards.hasKey(`procNameStr`):
                     CONTAINER[`classNameStr`].guards[`procNameStr`] = @[]
                   CONTAINER[`classNameStr`].guards[`procNameStr`].add(cast[Guard](guardInst))
-
+# Hàm phát hiện route
 macro detectRoutes(outBody: untyped, class: typed): untyped =
   result = newStmtList()
   for stmt in outBody:
@@ -202,37 +204,27 @@ macro detectRoutes(outBody: untyped, class: typed): untyped =
             result.add quote do: Get(RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`)))
           elif pragma[0].eqIdent("post"):
             result.add quote do: Post(RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`)))
-
+          elif pragma[0].eqIdent("put"):
+            result.add quote do: Put(RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`)))
+          elif pragma[0].eqIdent("delete"):
+            result.add quote do: Delete(RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`)))
+# Hàm parse bind param
 proc parseParamStmt(identName: NimNode, identNameStr: string, identType: NimNode): NimNode =
-  case $identType
+  let identTypeStr = $identType
+  let body         = newStmtList()
+  case identTypeStr
   of "int", "int32", "int64":
-    result = quote do:
-      var `identName`: int
-      try:
-        `identName` = parseInt(this.params[`identNameStr`])
-      except Exception as e:
-        raise BAD_REQUEST()
+    body.add quote do: parseInt(this.params[`identNameStr`])
   of "float", "float32", "float64":
-    result = quote do:
-      var `identName`: float
-      try:
-        `identName` = parseFloat(this.params[`identNameStr`])
-      except Exception as e:
-        raise BAD_REQUEST()
+    body.add quote do: parseFloat(this.params[`identNameStr`])
   of "bool":
-    result = quote do:
-      var `identName`: bool
-      try:
-        `identName` = parseBool(this.params[`identNameStr`])
-      except Exception as e:
-        echo repr e.msg
-        raise BAD_REQUEST()
-  of "string":
-    result = quote do:
-      let `identName` = this.params[`identNameStr`]
-  else:
-    result = quote do:
-      let `identName` = this.params[`identNameStr`]  # fallback string
+    body.add quote do: parseBool(this.params[`identNameStr`])
+  else: body.add quote do: this.params[`identNameStr`]
+  result = quote do:
+    let `identName` = (
+      try:   `body`
+      except: raise BAD_REQUEST()
+    )
 
 macro Controller*(class: typed, body: untyped): untyped =
   let outBody:      NimNode = newStmtList()
@@ -253,7 +245,6 @@ macro Controller*(class: typed, body: untyped): untyped =
       if not thisDefined:
         let thisParam = newIdentDefs(ident("this"), class)
         let newParams = nnkFormalParams.newTree(params[0], thisParam)
-
         for param in params:
           if param.kind != nnkEmpty:
             if param.kind == nnkIdentDefs:
@@ -272,7 +263,6 @@ macro Controller*(class: typed, body: untyped): untyped =
               else:
                 let i = newIdentDefs(ident($param[0]), ident($param[1]), newLit(0))
                 newParams.add(i)
-        echo         treeRepr procBodyNew
         procBodyNew.add(procBodyOriginal)
         for i in 2..<params[0].len:
           newParams.add(params[0][i])

@@ -15,3 +15,6 @@ Controller(HomeController):
 
   proc accounts() {.get("/account/:id").} =
     Ok("Hello from accounts! " & this.userService.name)  
+
+  proc html() {.get.} =
+    Ok ("<h1>dm</h1>")  
