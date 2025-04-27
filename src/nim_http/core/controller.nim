@@ -8,7 +8,7 @@ type BaseController* = ref object of RootObj
 
 let CONTAINER: TableRef[string, BaseController] = newTable[string, BaseController]()
 
-proc send(this: BaseController, code: HttpCode, data: string) = discard this.request.respond(code, data)
+proc send(this: BaseController, code: HttpCode, data: string): void = discard this.request.respond(code, data)
 
 template Ok*        (content): untyped = this.send(Http200, "{\"message\": \"" & content & "\"}")
 template BadRequest*(content): untyped = this.send(Http400, "{\"message\": \"" & content & "\"}")
@@ -17,9 +17,9 @@ template Created*(content):    untyped = this.send(Http201, "{\"message\": \"" &
 template Forbidden*(content):  untyped = this.send(Http403, "{\"message\": \"" & content & "\"}")
 template NotFound*(content):   untyped = this.send(Http404, "{\"message\": \"" & content & "\"}")
 
-proc invoke*(this: BaseController, handler: auto) =
-  let fn = proc (this: BaseController): Future[void] {.closure, async.} = await handler(this)
-  discard fn(this)
+proc invoke*(this: BaseController, handler: auto): Future[void] =
+  let fn = proc (this: BaseController): Future[void] {.closure, async.} = handler(this)
+  return fn(this)
 
 proc processRequest*(this: BaseController, req: Request): BaseController =
   this.request = req
@@ -53,7 +53,7 @@ var routeTree {.threadvar.}: TableRef[string, RouteDetail]
 routeTree = newTable[string, RouteDetail]()
 
 # Hàm xử lý request, kiểm tra các guards, middleware, interceptors trước khi thực thi nghiệp vụ ở controller
-proc resolve*(this: RouteDetail, request: Request): Future[void] {.async.} =
+proc resolve*(this: RouteDetail, request: Request): Future[void] =
   if this.delegate.guards.len > 0:
     for guard in this.delegate.guards:
       discard guard.canActivate(request)
@@ -112,7 +112,7 @@ proc register(
   )
 
 # Hàm xử lý request tại tầng router
-proc process*(request: Request): Future[void] =
+proc process*(request: Request): Future[void] {.async.} =
   for _, route in routeTree.pairs:
     if match(request.url.path, route.pattern.regex):
       if route.httpMethod == request.reqMethod:
@@ -120,7 +120,7 @@ proc process*(request: Request): Future[void] =
         if match(request.url.path, route.pattern.regex, matches):
           for i, name in route.pattern.paramSegments:
             route.delegate.instance.params[name] = matches[i]
-          return route.resolve(request)
+          await route.resolve(request)
       else: raise METHOD_NOT_ALLOWED()
   raise NOT_FOUND()
 
@@ -203,6 +203,37 @@ macro detectRoutes(outBody: untyped, class: typed): untyped =
           elif pragma[0].eqIdent("post"):
             result.add quote do: Post(RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`)))
 
+proc parseParamStmt(identName: NimNode, identNameStr: string, identType: NimNode): NimNode =
+  case $identType
+  of "int", "int32", "int64":
+    result = quote do:
+      var `identName`: int
+      try:
+        `identName` = parseInt(this.params[`identNameStr`])
+      except Exception as e:
+        raise BAD_REQUEST()
+  of "float", "float32", "float64":
+    result = quote do:
+      var `identName`: float
+      try:
+        `identName` = parseFloat(this.params[`identNameStr`])
+      except Exception as e:
+        raise BAD_REQUEST()
+  of "bool":
+    result = quote do:
+      var `identName`: bool
+      try:
+        `identName` = parseBool(this.params[`identNameStr`])
+      except Exception as e:
+        echo repr e.msg
+        raise BAD_REQUEST()
+  of "string":
+    result = quote do:
+      let `identName` = this.params[`identNameStr`]
+  else:
+    result = quote do:
+      let `identName` = this.params[`identNameStr`]  # fallback string
+
 macro Controller*(class: typed, body: untyped): untyped =
   let outBody:      NimNode = newStmtList()
   let classIdent:   NimNode = ident($class)
@@ -230,19 +261,18 @@ macro Controller*(class: typed, body: untyped): untyped =
                 let identName  = param[0][0]        # Tên biến
                 let identType  = param[1]           # Kiểu biến
                 let pragmaNode = param[0][1]
-                # Bước 1: tạo khai báo biến không khởi tạo (giá trị tạm thời)
+                # Bước 1: tạo khai báo biến không khởi tạo
                 let i = newIdentDefs(ident($identName), ident($identType), newLit(0))
                 newParams.add(i)
-                # Bước 2: nếu có pragma {.param.}, generate code để gán từ this.params
+                # Bước 2: generate code gán giá trị
                 let identNameStr = $identName
                 if pragmaNode.len > 0 and pragmaNode[0].eqIdent("param"):
-                  let assignStmt = quote do:
-                    let `identName` = parseInt(this.params[`identNameStr`])  # hoặc parseX nếu cần
-                  procBodyNew.add(assignStmt)
-                # sau này bạn có thể xử lý thêm {.query.}, {.body.}, etc...
+                  let parseStmt = parseParamStmt(identName, identNameStr, identType)
+                  procBodyNew.add(parseStmt)
               else:
                 let i = newIdentDefs(ident($param[0]), ident($param[1]), newLit(0))
                 newParams.add(i)
+        echo         treeRepr procBodyNew
         procBodyNew.add(procBodyOriginal)
         for i in 2..<params[0].len:
           newParams.add(params[0][i])

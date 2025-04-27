@@ -1,7 +1,7 @@
 import asynchttpserver, asyncdispatch, json
 
 # Base http exception
-type HttpException* = ref object of CatchableError
+type HttpException* = ref object of Exception
   statusCode*: HttpCode
   message*:    string
 method catch*(this: HttpException, req: Request): Future[void] {.base, async, gcsafe.} =

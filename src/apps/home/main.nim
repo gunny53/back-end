@@ -1,4 +1,4 @@
-import ../../nim_http/core/[controller, di, guard]
+import ../../nim_http/core/[controller, di, guard, exception]
 import ../../libs/auth/auth_guard
 import ./services/[user_service, log_service]
 
