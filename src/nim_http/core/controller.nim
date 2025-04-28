@@ -255,15 +255,15 @@ macro Controller*(class: typed, body: untyped): untyped =
   let classNameStr: string  = $class
   for stmt in body:
     if stmt.kind == nnkProcDef:
-      let procName    = stmt[0]  # Tên hàm
-      let generic     = stmt[1]  # Generic params (nếu có)
-      let patterns    = stmt[2]  # Pattern params (rarely used)
-      let params      = stmt[3]  # Đã patch "this"
-      let pragmas     = stmt[4]  # Giữ pragmas gốc
-      let annotations = stmt[5]  # Annotations
-      let procBodyOriginal    = stmt[6]  # Thân hàm
-      let thisDefined = anyIt(params[1..^1], it[1].kind != nnkEmpty and $it[1] == $BaseController)
-      let procBodyNew = newStmtList()
+      let procName         = stmt[0]  # Tên hàm
+      let generic          = stmt[1]  # Generic params (nếu có)
+      let patterns         = stmt[2]  # Pattern params (rarely used)
+      let params           = stmt[3]  # Đã patch "this"
+      let pragmas          = stmt[4]  # Giữ pragmas gốc
+      let annotations      = stmt[5]  # Annotations
+      let procBodyOriginal = stmt[6]  # Thân hàm
+      let thisDefined      = anyIt(params[1..^1], it[1].kind != nnkEmpty and $it[1] == $BaseController)
+      let procBodyNew      = newStmtList()
       # Nếu chưa có param nào (chỉ có return type), thì chèn this vào
       if not thisDefined:
         let thisParam = newIdentDefs(ident("this"), class)
