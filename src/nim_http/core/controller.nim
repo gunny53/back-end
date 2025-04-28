@@ -1,19 +1,28 @@
 import macros, asyncdispatch, asynchttpserver, macrocache, tables, sequtils, di, strutils, utils, uri, json
 import guard, re, exception
 
+# Định nghĩa kiểu của 1 controller cơ bản
+# BaseController là lớp cơ sở cho các controller khác, chứa các thuộc tính và phương thức chung
 type BaseController* = ref object of RootObj
+  # Đối tượng Request đại diện cho HTTP request
   request*: Request
+  # Bảng lưu trữ các tham số của request (path, params binds)
   params*:  TableRef[string, string]     = newTable[string, string]()
+  # Bảng lưu trữ các guards cho từng phương thức
   guards*:  TableRef[string, seq[Guard]] = newTable[string, seq[Guard]]()
   isHtml: bool # TODO làm 1 response header content type để trả về kiểu tương ứng
 
+# Định nghĩa các pragma cho param (các loại tham số trong controller)
 type ParamPragma = enum
   body, query, param
 
+# Bảng lưu các inst controller theo tên
 let CONTAINER: TableRef[string, BaseController] = newTable[string, BaseController]()
 
+# Hàm gửi response cho client, trả về status code và dữ liệu
 proc send(this: BaseController, code: HttpCode, data: string): void = discard this.request.respond(code, data)
 
+# Các template tương ứng với các status code thông dụng
 template Ok*        (content): untyped = this.send(Http200, content)
 template BadRequest*(content): untyped = this.send(Http400, content)
 template NoContent* ():        untyped = this.request.respond(Http204)
@@ -21,38 +30,43 @@ template Created*(content):    untyped = this.send(Http201, content)
 template Forbidden*(content):  untyped = this.send(Http403, content)
 template NotFound*(content):   untyped = this.send(Http404, content)
 
+# Hàm xử lý nghiệp vụ của controller khi đã vượt qua các tầng xác thực (guards)
 proc invoke*(this: BaseController, handler: auto): Future[void] =
   let fn = proc (this: BaseController): Future[void] {.closure, async.} = handler(this)
   return fn(this)
 
+# Hàm gắn request vào controller
 proc processRequest*(this: BaseController, req: Request): BaseController =
   this.request = req
   return this
 
+# Định nghĩa kiểu RoutePattern dùng để lưu trữ thông tin pattern của route
+# Mỗi route có thể có tham số động (parameter) trong URL, đây là cách xử lý những tham số đó.
 type
   # Lưu thông tin meta của route dưới dạng regex pattern
   RoutePattern* = ref object
-    raw*:           string
-    regex*:         Regex
-    paramSegments*: seq[string]
+    raw*:           string      # Đường dẫn gốc của route
+    regex*:         Regex       # Biểu thức chính quy dùng để so khớp URL
+    paramSegments*: seq[string] # Các tham số động trong đường dẫn
 
   # Lưu thông tin chi tiết của 1 route
   RouteDetail* = ref object
-    httpMethod*: HttpMethod
-    pattern*:    RoutePattern
-    delegate*:   ControllerDelegate
+    httpMethod*: HttpMethod         # Phương thức HTTP (GET, POST, etc.)
+    pattern*:    RoutePattern       # Pattern của route
+    delegate*:   ControllerDelegate # Hàm handler xử lý request cho route
 
   # Lưu thông tin của 1 route
   RouteItem* = ref object
-    path:     string
-    delegate: ControllerDelegate
+    path:     string             # Đường dẫn của route
+    delegate: ControllerDelegate # Delegate cho route (controller + handler)
 
   # Lưu thông tin của controller
   ControllerDelegate* = ref object
-    instance*: BaseController
-    handler*:  proc (this: BaseController): Future[void] {.gcsafe, closure.}
-    guards*:   seq[Guard]
+    instance*: BaseController                                                # Instance của controller
+    handler*:  proc (this: BaseController): Future[void] {.gcsafe, closure.} # Hàm xử lý request
+    guards*:   seq[Guard]                                                    # Các guards áp dụng cho phương thức
 
+# Lưu trữ các route trong bộ nhớ
 var routeTree {.threadvar.}: TableRef[string, RouteDetail]
 routeTree = newTable[string, RouteDetail]()
 
@@ -67,10 +81,11 @@ proc resolve*(this: RouteDetail, request: Request): Future[void] =
 macro mix[T: BaseController](ctlClass: typedesc[T], handler: untyped): ControllerDelegate =
   let methodName = $handler
   result         = quote do:
-    let hand =
-      proc (this: BaseController): Future[void] {.gcsafe, closure.} =
-        let ctrl = cast[`ctlClass`](this)
-        `handler`(ctrl)
+    # Ép kiểu về kiểu gốc
+    let hand = proc (this: BaseController): Future[void] {.gcsafe, closure.} =
+      let ctrl = cast[`ctlClass`](this)
+      `handler`(ctrl)
+    # Phát hiện các guards và lưu vào bộ nhớ quản lý guards của instance controller
     let guards = (
       if CONTAINER[$`ctlClass`].guards.hasKey(`methodName`):
          CONTAINER[$`ctlClass`].guards[`methodName`]
@@ -216,7 +231,7 @@ proc parseParamStmt(identName: NimNode, identNameStr: string, identType: NimNode
       try:   `body`
       except: raise BAD_REQUEST()
     )
-
+# Hàm parse query
 proc parseQueryStmt(identName: NimNode, identNameStr: string, identType: NimNode, defaultVal: NimNode): NimNode =
   result = quote do:
     let `identName`: `identType` = this.request.url.query
@@ -226,14 +241,14 @@ proc parseQueryStmt(identName: NimNode, identNameStr: string, identType: NimNode
       .mapIt(decodeUrl(it[1]))
       .headOption()
       .flatMap(parseOrNone[`identType`]).getOrElse(`defaultVal`)
-
+# Hàm parse raw body to Dto class
 proc parseBodyStmt(identName: NimNode, identNameStr: string, identType: NimNode): NimNode =
   result = quote do:
     let `identName`: `identType` = (
       try:    to(parseJson(this.request.body), `identType`)
       except: raise BAD_REQUEST()
     )
-
+# Định nghĩa Controller
 macro Controller*(class: typed, body: untyped): untyped =
   let outBody:      NimNode = newStmtList()
   let classIdent:   NimNode = ident($class)
@@ -291,7 +306,7 @@ macro Controller*(class: typed, body: untyped): untyped =
           newParams,    # Đã patch "this"
           pragmas,      # Giữ pragmas gốc
           annotations,  # Annotations
-          procBodyNew      # Thân hàm
+          procBodyNew   # Thân hàm
         )
         outBody.add(newProc)
       else:
@@ -305,7 +320,7 @@ macro Controller*(class: typed, body: untyped): untyped =
     injector(inst)
     detectGuards(`outBody`, `class`)
     detectRoutes(`outBody`, `class`)
-
+  # Cài đặt init controller và đăng ký các route
   result.add(outBody)
   result.add(init)
 
