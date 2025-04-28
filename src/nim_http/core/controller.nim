@@ -1,4 +1,4 @@
-import macros, asyncdispatch, asynchttpserver, macrocache, tables, sequtils, di, strutils
+import macros, asyncdispatch, asynchttpserver, macrocache, tables, sequtils, di, strutils, utils, uri
 import guard, re, exception
 
 type BaseController* = ref object of RootObj
@@ -101,10 +101,7 @@ proc parseRoutePattern(pattern: string): (RoutePattern, string) =
   result = (RoutePattern(raw: pattern, regex: re(regexStr), paramSegments: paramSegments), regexStr)
 
 # Đăng ký route
-proc register(
-  httpMethod: HttpMethod,
-  route:      RouteItem
-) =
+proc register(httpMethod: HttpMethod, route: RouteItem) =
   let (pattern, key) = parseRoutePattern(route.path)
   routeTree[key]     = RouteDetail(
     httpMethod: httpMethod,
@@ -124,15 +121,6 @@ proc process*(request: Request): Future[void] {.async.} =
           await route.resolve(request)
       else: raise METHOD_NOT_ALLOWED()
   raise NOT_FOUND()
-
-template Get*    (route: RouteItem): untyped = register(HttpGet,     route)
-template Post*   (route: RouteItem): untyped = register(HttpPost,    route)
-template Put*    (route: RouteItem): untyped = register(HttpPut,     route)
-template Patch*  (route: RouteItem): untyped = register(HttpPatch,   route)
-template Options*(route: RouteItem): untyped = register(HttpOptions, route)
-template Delete* (route: RouteItem): untyped = register(HttpDelete,  route)
-template Trace*  (route: RouteItem): untyped = register(HttpTrace,   route)
-template Connect*(route: RouteItem): untyped = register(HttpConnect, route)
 
 # Hàm phát hiện và inject di
 macro injector(inst: typed): untyped =
@@ -226,6 +214,16 @@ proc parseParamStmt(identName: NimNode, identNameStr: string, identType: NimNode
       except: raise BAD_REQUEST()
     )
 
+proc parseQueryStmt(identName: NimNode, identNameStr: string, identType: NimNode, defaultVal: NimNode): NimNode =
+  result = quote do:
+    let `identName`: `identType` = this.request.url.query
+      .split("&")
+      .mapIt(it.split("=", maxsplit = 1))
+      .filterIt(it.len == 2 and it[0] == `identNameStr`)
+      .mapIt(decodeUrl(it[1]))
+      .headOption()
+      .flatMap(parseOrNone[`identType`]).getOrElse(`defaultVal`)
+
 macro Controller*(class: typed, body: untyped): untyped =
   let outBody:      NimNode = newStmtList()
   let classIdent:   NimNode = ident($class)
@@ -253,13 +251,19 @@ macro Controller*(class: typed, body: untyped): untyped =
                 let identType  = param[1]           # Kiểu biến
                 let pragmaNode = param[0][1]
                 # Bước 1: tạo khai báo biến không khởi tạo
-                let i = newIdentDefs(ident($identName), ident($identType), newLit(0))
+                let defaultVal = case $identType:
+                  of   "int", "int32", "int64", "float", "float32", "float64": newLit(0)
+                  else: newStrLitNode("")
+                let i = newIdentDefs(ident($identName), ident($identType), defaultVal)
                 newParams.add(i)
                 # Bước 2: generate code gán giá trị
                 let identNameStr = $identName
                 if pragmaNode.len > 0 and pragmaNode[0].eqIdent("param"):
                   let parseStmt = parseParamStmt(identName, identNameStr, identType)
                   procBodyNew.add(parseStmt)
+                elif pragmaNode.len > 0 and pragmaNode[0].eqIdent("query"):
+                  let parseStmt = parseQueryStmt(identName, identNameStr, identType, defaultVal)
+                  procBodyNew.add(parseStmt)  
               else:
                 let i = newIdentDefs(ident($param[0]), ident($param[1]), newLit(0))
                 newParams.add(i)
@@ -291,6 +295,15 @@ macro Controller*(class: typed, body: untyped): untyped =
   result.add(outBody)
   result.add(init)
 
+template Get*    (route: RouteItem): untyped = register(HttpGet,     route)
+template Post*   (route: RouteItem): untyped = register(HttpPost,    route)
+template Put*    (route: RouteItem): untyped = register(HttpPut,     route)
+template Patch*  (route: RouteItem): untyped = register(HttpPatch,   route)
+template Options*(route: RouteItem): untyped = register(HttpOptions, route)
+template Delete* (route: RouteItem): untyped = register(HttpDelete,  route)
+template Trace*  (route: RouteItem): untyped = register(HttpTrace,   route)
+template Connect*(route: RouteItem): untyped = register(HttpConnect, route)
+
 template get*    (path: string = "/") {.pragma.}
 template post*   (path: string = "/") {.pragma.}
 template put*    (path: string = "/") {.pragma.}
@@ -300,5 +313,5 @@ template trace*  (path: string = "/") {.pragma.}
 template connect*(path: string = "/") {.pragma.}
 template options*(path: string = "/") {.pragma.}
 template head*   (path: string = "/") {.pragma.}
-template param*  (key: string = ""){.pragma.}
-template query*  (key: string = ""){.pragma.}
+template param*  (key: string = "")   {.pragma.}
+template query*  (key: string = "")   {.pragma.}
