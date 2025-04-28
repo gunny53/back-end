@@ -1,4 +1,4 @@
-import macros, asyncdispatch, asynchttpserver, macrocache, tables, sequtils, di, strutils, utils, uri
+import macros, asyncdispatch, asynchttpserver, macrocache, tables, sequtils, di, strutils, utils, uri, json
 import guard, re, exception
 
 type BaseController* = ref object of RootObj
@@ -6,6 +6,9 @@ type BaseController* = ref object of RootObj
   params*:  TableRef[string, string]     = newTable[string, string]()
   guards*:  TableRef[string, seq[Guard]] = newTable[string, seq[Guard]]()
   isHtml: bool # TODO làm 1 response header content type để trả về kiểu tương ứng
+
+type ParamPragma = enum
+  body, query, param
 
 let CONTAINER: TableRef[string, BaseController] = newTable[string, BaseController]()
 
@@ -185,17 +188,17 @@ macro detectRoutes(outBody: untyped, class: typed): untyped =
         if pragma.kind == nnkIdent:
           let path = "/"
           if pragma.eqIdent("get"):
-            result.add quote do: Get(RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`)))
+            result.add quote do: register(HttpGet, (RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`))))
         if pragma.kind == nnkCall:
           let path = $pragma[1]
           if pragma[0].eqIdent("get"):
-            result.add quote do: Get(RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`)))
+            result.add quote do: register(HttpGet, (RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`))))
           elif pragma[0].eqIdent("post"):
-            result.add quote do: Post(RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`)))
+            result.add quote do: register(HttpPost, (RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`))))
           elif pragma[0].eqIdent("put"):
-            result.add quote do: Put(RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`)))
+            result.add quote do: register(HttpPut, (RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`))))
           elif pragma[0].eqIdent("delete"):
-            result.add quote do: Delete(RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`)))
+            result.add quote do: register(HttpDelete, (RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`))))
 # Hàm parse bind param
 proc parseParamStmt(identName: NimNode, identNameStr: string, identType: NimNode): NimNode =
   let identTypeStr = $identType
@@ -223,6 +226,13 @@ proc parseQueryStmt(identName: NimNode, identNameStr: string, identType: NimNode
       .mapIt(decodeUrl(it[1]))
       .headOption()
       .flatMap(parseOrNone[`identType`]).getOrElse(`defaultVal`)
+
+proc parseBodyStmt(identName: NimNode, identNameStr: string, identType: NimNode): NimNode =
+  result = quote do:
+    let `identName`: `identType` = (
+      try:    to(parseJson(this.request.body), `identType`)
+      except: raise BAD_REQUEST()
+    )
 
 macro Controller*(class: typed, body: untyped): untyped =
   let outBody:      NimNode = newStmtList()
@@ -253,17 +263,21 @@ macro Controller*(class: typed, body: untyped): untyped =
                 # Bước 1: tạo khai báo biến không khởi tạo
                 let defaultVal = case $identType:
                   of   "int", "int32", "int64", "float", "float32", "float64": newLit(0)
-                  else: newStrLitNode("")
+                  of   "string": newStrLitNode("")
+                  else: newNilLit()
                 let i = newIdentDefs(ident($identName), ident($identType), defaultVal)
                 newParams.add(i)
                 # Bước 2: generate code gán giá trị
                 let identNameStr = $identName
-                if pragmaNode.len > 0 and pragmaNode[0].eqIdent("param"):
+                if pragmaNode.len > 0 and pragmaNode[0].eqIdent($ParamPragma.param):
                   let parseStmt = parseParamStmt(identName, identNameStr, identType)
                   procBodyNew.add(parseStmt)
-                elif pragmaNode.len > 0 and pragmaNode[0].eqIdent("query"):
+                elif pragmaNode.len > 0 and pragmaNode[0].eqIdent($ParamPragma.query):
                   let parseStmt = parseQueryStmt(identName, identNameStr, identType, defaultVal)
                   procBodyNew.add(parseStmt)  
+                elif pragmaNode.len > 0 and pragmaNode[0].eqIdent($ParamPragma.body):
+                  let parseStmt = parseBodyStmt(identName, identNameStr, identType)
+                  procBodyNew.add(parseStmt)   
               else:
                 let i = newIdentDefs(ident($param[0]), ident($param[1]), newLit(0))
                 newParams.add(i)
@@ -295,15 +309,7 @@ macro Controller*(class: typed, body: untyped): untyped =
   result.add(outBody)
   result.add(init)
 
-template Get*    (route: RouteItem): untyped = register(HttpGet,     route)
-template Post*   (route: RouteItem): untyped = register(HttpPost,    route)
-template Put*    (route: RouteItem): untyped = register(HttpPut,     route)
-template Patch*  (route: RouteItem): untyped = register(HttpPatch,   route)
-template Options*(route: RouteItem): untyped = register(HttpOptions, route)
-template Delete* (route: RouteItem): untyped = register(HttpDelete,  route)
-template Trace*  (route: RouteItem): untyped = register(HttpTrace,   route)
-template Connect*(route: RouteItem): untyped = register(HttpConnect, route)
-
+# Method pramga
 template get*    (path: string = "/") {.pragma.}
 template post*   (path: string = "/") {.pragma.}
 template put*    (path: string = "/") {.pragma.}
@@ -313,5 +319,8 @@ template trace*  (path: string = "/") {.pragma.}
 template connect*(path: string = "/") {.pragma.}
 template options*(path: string = "/") {.pragma.}
 template head*   (path: string = "/") {.pragma.}
-template param*  (key: string = "")   {.pragma.}
-template query*  (key: string = "")   {.pragma.}
+
+# Param pragma
+template `$ParamPragma.param`*  (key: string = "") {.pragma.}
+template `$ParamPragma.query`*  (key: string = "") {.pragma.}
+template `$ParamPragma.body`*() {.pragma.}
