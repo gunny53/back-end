@@ -1,5 +1,5 @@
 import macros, asyncdispatch, asynchttpserver, macrocache, tables, sequtils, di, strutils, utils, uri, json
-import guard, re, exception
+import guard, re, exception, response
 
 # Định nghĩa kiểu của 1 controller cơ bản
 # BaseController là lớp cơ sở cho các controller khác, chứa các thuộc tính và phương thức chung
@@ -11,6 +11,7 @@ type BaseController* = ref object of RootObj
   # Bảng lưu trữ các guards cho từng phương thức
   guards*:  TableRef[string, seq[Guard]] = newTable[string, seq[Guard]]()
   isHtml: bool # TODO làm 1 response header content type để trả về kiểu tương ứng
+  response: Response = Response()
 
 # Định nghĩa các pragma cho param (các loại tham số trong controller)
 type ParamPragma = enum
@@ -23,12 +24,12 @@ let CONTAINER: TableRef[string, BaseController] = newTable[string, BaseControlle
 proc send(this: BaseController, code: HttpCode, data: string): void = discard this.request.respond(code, data)
 
 # Các template tương ứng với các status code thông dụng
-template Ok*        (content): untyped = this.send(Http200, content)
-template BadRequest*(content): untyped = this.send(Http400, content)
+template Ok*        (content): untyped = this.response.send(Http200, content)
+template BadRequest*(content): untyped = this.response.send(Http400, content)
 template NoContent* ():        untyped = this.request.respond(Http204)
-template Created*(content):    untyped = this.send(Http201, content)
-template Forbidden*(content):  untyped = this.send(Http403, content)
-template NotFound*(content):   untyped = this.send(Http404, content)
+template Created*(content):    untyped = this.response.send(Http201, content)
+template Forbidden*(content):  untyped = this.response.send(Http403, content)
+template NotFound*(content):   untyped = this.response.send(Http404, content)
 
 # Hàm xử lý nghiệp vụ của controller khi đã vượt qua các tầng xác thực (guards)
 proc invoke*(this: BaseController, handler: auto): Future[void] =
@@ -37,7 +38,8 @@ proc invoke*(this: BaseController, handler: auto): Future[void] =
 
 # Hàm gắn request vào controller
 proc processRequest*(this: BaseController, req: Request): BaseController =
-  this.request = req
+  this.request          = req
+  this.response.request = req
   return this
 
 # Định nghĩa kiểu RoutePattern dùng để lưu trữ thông tin pattern của route
