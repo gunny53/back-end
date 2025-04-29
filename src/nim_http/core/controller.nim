@@ -164,58 +164,6 @@ macro injector(inst: typed): untyped =
                     let rawService     = singletonCONTAINER["singleton_" & `fieldTypeStr`]
                     let service        = cast[`fieldType`](rawService)
                     `inst`.`fieldName` = service
-# Hàm phát hiện guards
-macro detectGuards(outBody: untyped, class: typed): untyped =
-  result           = newStmtList()
-  let classNameStr = $class
-  for stmt in outBody:
-    if stmt.kind == nnkProcDef:
-      let procName    = stmt[0]  # Tên hàm
-      let pragmas     = stmt[4]  # Giữ pragmas gốc
-      let procNameStr = ($procName).strip(chars = {'*'})
-      for pragma in pragmas:
-        if pragma.kind == nnkIdent:
-          discard # cần triển khai kiểm tra nếu chỉ khai báo là .get. thì mặc định sẽ hiểu path là "/"
-        if pragma.kind == nnkCall:
-          if pragma[0].eqIdent("useGuards"):
-            if pragma[1].kind == nnkIdent:
-              let ide = pragma[1]
-              result.add quote do:
-                let guardInst = new `ide`
-                if not CONTAINER[`classNameStr`].guards.hasKey(`procNameStr`):
-                  CONTAINER[`classNameStr`].guards[`procNameStr`] = @[]
-                CONTAINER[`classNameStr`].guards[`procNameStr`].add(cast[Guard](guardInst))
-            else:
-              for brk in pragma[1]:
-                result.add quote do:
-                  let guardInst = new `brk`
-                  if not CONTAINER[`classNameStr`].guards.hasKey(`procNameStr`):
-                    CONTAINER[`classNameStr`].guards[`procNameStr`] = @[]
-                  CONTAINER[`classNameStr`].guards[`procNameStr`].add(cast[Guard](guardInst))
-# Hàm phát hiện route
-macro detectRoutes(outBody: untyped, class: typed): untyped =
-  result = newStmtList()
-  for stmt in outBody:
-    if stmt.kind == nnkProcDef:
-      let procName        = stmt[0]  # Tên hàm
-      let pragmas         = stmt[4]  # Giữ pragmas gốc
-      let procNameStr     = ($procName).strip(chars = {'*'})
-      let procNameStriped = ident(procNameStr)
-      for pragma in pragmas:
-        if pragma.kind == nnkIdent:
-          let path = "/"
-          if pragma.eqIdent("get"):
-            result.add quote do: register(HttpGet, (RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`))))
-        if pragma.kind == nnkCall:
-          let path = $pragma[1]
-          if pragma[0].eqIdent("get"):
-            result.add quote do: register(HttpGet, (RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`))))
-          elif pragma[0].eqIdent("post"):
-            result.add quote do: register(HttpPost, (RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`))))
-          elif pragma[0].eqIdent("put"):
-            result.add quote do: register(HttpPut, (RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`))))
-          elif pragma[0].eqIdent("delete"):
-            result.add quote do: register(HttpDelete, (RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`))))
 # Hàm parse bind param
 proc parseParamStmt(identName: NimNode, identNameStr: string, identType: NimNode): NimNode =
   let identTypeStr = $identType
@@ -250,8 +198,16 @@ proc parseBodyStmt(identName: NimNode, identNameStr: string, identType: NimNode)
       try:    to(parseJson(this.request.body), `identType`)
       except: raise BAD_REQUEST()
     )
+
+proc registerGuard(className: string, procName: string, guardType: typedesc[Guard]) =
+  let guardInst = new guardType
+  if not CONTAINER[className].guards.hasKey(procName):
+    CONTAINER[className].guards[procName] = @[]
+  CONTAINER[className].guards[procName].add(cast[Guard](guardInst))
+
 # Định nghĩa Controller
 macro Controller*(class: typed, body: untyped): untyped =
+  result                    = newStmtList()
   let outBody:      NimNode = newStmtList()
   let classIdent:   NimNode = ident($class)
   let classNameStr: string  = $class
@@ -315,17 +271,50 @@ macro Controller*(class: typed, body: untyped): untyped =
         outBody.add(stmt)
     else:
       outBody.add(stmt)
-  result = newStmtList()
   let init: NimNode = quote do:
     let inst = new `classIdent`
     CONTAINER[`classNameStr`] = cast[BaseController](inst)
     injector(inst)
-    detectGuards(`outBody`, `class`)
-    detectRoutes(`outBody`, `class`)
   # Cài đặt init controller và đăng ký các route
   result.add(outBody)
   result.add(init)
-
+  let lBody = newStmtList()
+  for stmt in outBody:
+    if stmt.kind == nnkProcDef:
+      let procName        = stmt[0]  # Tên hàm
+      let pragmas         = stmt[4]  # Giữ pragmas gốc
+      let procNameStr     = ($procName).strip(chars = {'*'})
+      let procNameStriped = ident(procNameStr)
+      for pragma in pragmas:
+        if pragma.kind == nnkIdent:
+          let path = "/"
+          if pragma.eqIdent("get"):
+            lBody.add quote do: register(HttpGet, (RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`))))
+        if pragma.kind == nnkCall:
+          let path = $pragma[1]
+          if pragma[0].eqIdent("get"):
+            lBody.add quote do: register(HttpGet, (RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`))))
+          elif pragma[0].eqIdent("post"):
+            lBody.add quote do: register(HttpPost, (RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`))))
+          elif pragma[0].eqIdent("put"):
+            lBody.add quote do: register(HttpPut, (RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`))))
+          elif pragma[0].eqIdent("delete"):
+            lBody.add quote do: register(HttpDelete, (RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`))))
+      for pragma in pragmas:
+        if pragma.kind == nnkIdent:
+          discard # cần triển khai kiểm tra nếu chỉ khai báo là .get. thì mặc định sẽ hiểu path là "/"
+        if pragma.kind == nnkCall:
+          if pragma[0].eqIdent("useGuards"):
+            if pragma[1].kind == nnkIdent:
+              let ide = pragma[1]
+              lBody.add quote do:
+                registerGuard(`classNameStr`, `procNameStr`, `ide`)
+            else:
+              for brk in pragma[1]:
+                lBody.add quote do:
+                  registerGuard(`classNameStr`, `procNameStr`, `brk`)
+  result.add(lBody)
+  echo treeRepr result
 # Method pramga
 template get*    (path: string = "/") {.pragma.}
 template post*   (path: string = "/") {.pragma.}
