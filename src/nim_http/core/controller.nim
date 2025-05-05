@@ -206,8 +206,13 @@ proc registerGuard(className: string, procName: string, guardType: typedesc[Guar
   CONTAINER[className].guards[procName].add(cast[Guard](guardInst))
 
 # Định nghĩa Controller
-macro Controller*(class: typed, body: untyped): untyped =
+macro Controller*(classStr: static[string], body: untyped): untyped =
   result                    = newStmtList()
+  let class:NimNode   = ident(classStr)
+  let typeDef = quote do:
+    type `class` = ref object of BaseController
+  result.add quote("@") do:
+    @typeDef
   let outBody:      NimNode = newStmtList()
   let classIdent:   NimNode = ident($class)
   let classNameStr: string  = $class

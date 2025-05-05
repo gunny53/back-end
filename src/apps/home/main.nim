@@ -2,27 +2,27 @@ import ../../nim_http/core/[controller, di, guard, exception]
 import ../../libs/auth/auth_guard, options, json
 import ./services/[user_service, log_service]
 
-type HomeController = ref object of BaseController
-  userService {.inject.}: UserService
-  logService  {.inject.}: LogService
-
 type UserDto = ref object
   username: string  
 
-Controller(HomeController):
+
+# type HomeController = ref object of BaseController
+#   userService {.inject.}: UserService
+#   logService  {.inject.}: LogService
+Controller "Home":
   
   proc index() {.get("/index"), useGuards(AuthGuard).} =
-    Ok "Hello from HomeController! " & this.userService.name
+    Ok "Hello from HomeController! " 
 
   proc users(
-    id {.param.}:   int,
+    id   {.param.}: int,
     name {.query.}: string,
     user {.body.}:  UserDto
   ) {.post("/users/:id").} =
     Ok user
 
   proc accounts() {.get("/account/:id").} =
-    Ok "Hello from accounts! " & this.userService.name
+    Ok "Hello from accounts! " 
 
   proc html() {.get.} =
     Ok "<html>dm</html>"
