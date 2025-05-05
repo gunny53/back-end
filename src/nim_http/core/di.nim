@@ -11,7 +11,7 @@ macro Injectable*(body: untyped): untyped =
     let bodyType = $body
     result.add quote do:
       let inst = new(`body`)
-      singletonCONTAINER["singleton_" & `bodyType`] = inst
+      singletonCONTAINER[`bodyType`] = inst
   else: discard
 
 template inject*(): BaseSingleton {.pragma.}

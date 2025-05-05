@@ -6,9 +6,8 @@ type UserDto = ref object
   username: string  
 
 Controller Home:
-  # userService {.inject.}: UserService
-  # logService  {.inject.}: LogService
-  
+  let uService {.inject, gcsafe.}: UserService
+
   proc index() {.get("/index"), useGuards(AuthGuard).} =
     Ok "Hello from HomeController! " 
 
@@ -23,4 +22,5 @@ Controller Home:
     Ok "Hello from accounts! " 
 
   proc html() {.get.} =
+    echo uService.name
     Ok "<html>dm</html>"

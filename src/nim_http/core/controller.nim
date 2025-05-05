@@ -142,28 +142,6 @@ proc process*(request: Request): Future[void] {.async.} =
       else: raise METHOD_NOT_ALLOWED()
   raise NOT_FOUND()
 
-# Hàm phát hiện và inject di
-macro injector(inst: typed): untyped =
-  let
-    typ     = inst.getTypeInst
-    typImpl = typ.getImpl
-  result = newStmtList()
-  for idef in typImpl[2]:
-    for node in idef[2]:
-      if node.kind == nnkIdentDefs:
-        for fields in node:
-          if fields.kind == nnkPragmaExpr:
-            for field in fields:
-              for pragma in field:
-                if pragma.eqident"inject":
-                  let fieldNameStr = ($fields[0]).strip(chars = {'*'})
-                  let fieldName    = ident(fieldNameStr)
-                  let fieldTypeStr = $node[1]
-                  let fieldType    = ident(fieldTypeStr)
-                  result.add quote do:
-                    let rawService     = singletonCONTAINER["singleton_" & `fieldTypeStr`]
-                    let service        = cast[`fieldType`](rawService)
-                    `inst`.`fieldName` = service
 # Hàm parse bind param
 proc parseParamStmt(identName: NimNode, identNameStr: string, identType: NimNode): NimNode =
   let identTypeStr = $identType
@@ -211,11 +189,24 @@ macro Controller*(classStr, body: untyped): untyped =
   let class: NimNode = ident($classStr)
   let typeDef = quote do:
     type `class` = ref object of BaseController
-  result.add quote("@") do:  @typeDef
+  result.add quote("@") do: @typeDef
   let outBody:      NimNode = newStmtList()
   let classIdent:   NimNode = ident($class)
   let classNameStr: string  = $class
   for stmt in body:
+    if stmt.kind == nnkLetSection:
+      echo treeRepr stmt
+      let identDefs = stmt[0]
+      for identDef in identDefs:
+        let typ = identDefs[1]
+        if identDef.kind == nnkPragmaExpr:
+          let identName   = identDef[0]
+          let identPragma = identDef[1][0]
+          if identPragma.eqIdent("inject"):
+            let typStr = $typ
+            result.add newLetStmt(identName, quote do:
+                cast[`typ`](singletonCONTAINER[`typStr`]))
+            
     if stmt.kind == nnkProcDef:
       let procName         = stmt[0]  # Tên hàm
       let generic          = stmt[1]  # Generic params (nếu có)
@@ -261,6 +252,7 @@ macro Controller*(classStr, body: untyped): untyped =
         procBodyNew.add(procBodyOriginal)
         for i in 2..<params[0].len:
           newParams.add(params[0][i])
+        pragmas.add(ident("gcsafe"))  
         let newProc: NimNode = nnkProcDef.newTree(
           procName,     # Tên hàm
           generic,      # Generic params (nếu có)
@@ -273,12 +265,10 @@ macro Controller*(classStr, body: untyped): untyped =
         outBody.add(newProc)
       else:
         outBody.add(stmt)
-    else:
-      outBody.add(stmt)
+
   let init: NimNode = quote do:
     let inst = new `classIdent`
     CONTAINER[`classNameStr`] = cast[BaseController](inst)
-    #injector(inst)
   # Cài đặt init controller và đăng ký các route
   result.add(outBody)
   result.add(init)
@@ -318,7 +308,6 @@ macro Controller*(classStr, body: untyped): untyped =
                 lBody.add quote do:
                   registerGuard(`classNameStr`, `procNameStr`, `brk`)
   result.add(lBody)
-  echo treeRepr result
 # Method pramga
 template get*    (path: string = "/") {.pragma.}
 template post*   (path: string = "/") {.pragma.}
