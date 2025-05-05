@@ -206,13 +206,12 @@ proc registerGuard(className: string, procName: string, guardType: typedesc[Guar
   CONTAINER[className].guards[procName].add(cast[Guard](guardInst))
 
 # Định nghĩa Controller
-macro Controller*(classStr: static[string], body: untyped): untyped =
-  result                    = newStmtList()
-  let class:NimNode   = ident(classStr)
+macro Controller*(classStr, body: untyped): untyped =
+  result             = newStmtList()
+  let class: NimNode = ident($classStr)
   let typeDef = quote do:
     type `class` = ref object of BaseController
-  result.add quote("@") do:
-    @typeDef
+  result.add quote("@") do:  @typeDef
   let outBody:      NimNode = newStmtList()
   let classIdent:   NimNode = ident($class)
   let classNameStr: string  = $class
@@ -279,7 +278,7 @@ macro Controller*(classStr: static[string], body: untyped): untyped =
   let init: NimNode = quote do:
     let inst = new `classIdent`
     CONTAINER[`classNameStr`] = cast[BaseController](inst)
-    injector(inst)
+    #injector(inst)
   # Cài đặt init controller và đăng ký các route
   result.add(outBody)
   result.add(init)

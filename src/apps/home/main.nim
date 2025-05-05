@@ -5,11 +5,9 @@ import ./services/[user_service, log_service]
 type UserDto = ref object
   username: string  
 
-
-# type HomeController = ref object of BaseController
-#   userService {.inject.}: UserService
-#   logService  {.inject.}: LogService
-Controller "Home":
+Controller Home:
+  # userService {.inject.}: UserService
+  # logService  {.inject.}: LogService
   
   proc index() {.get("/index"), useGuards(AuthGuard).} =
     Ok "Hello from HomeController! " 
