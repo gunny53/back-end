@@ -5,24 +5,31 @@ import ./services/[user, log]
 type UserDto = ref object
   username: string  
 
-Controller Home:
+Controller Home["api/v1"]:
 
-  proc index() {.get("/index"), useGuards(AuthGuard).} =
-    Http200 "Hello from HomeController! " 
+  [HttpGet["/index"]]
+  [UseGuards(AuthGuard)]
+  proc index() = Http200 "Hello from HomeController! " 
 
+  [HttpPost["/users/:id"]]
+  [UseGuards(AuthGuard)]
   proc users(
     id   {.param.}: int,
     name {.query.}: string,
     user {.body.}:  UserDto
-  ) {.post("/users/:id").} =
-    Http200 user
+  ) = Http200 user
 
-  proc accounts(id {.param.}: int, name {.query.}: string) {.get("/account/:id").} =
+  [HttpGet["/account/:id"]]
+  proc accounts(
+    id   {.param.}: int,
+    name {.query.}: string
+  ) =
     if name == "":
       Http400 "erro"
     Http200 "Hello from accounts! " & $id & ", name = " & name
 
-  proc html() {.get.} =
+  [HttpGet]
+  proc html() =
     let userService = inject(UserService)
     echo userService.name
     Http200 "<html>dm</html>"

@@ -184,20 +184,23 @@ proc registerGuard(className: string, procName: string, guardType: typedesc[Guar
   CONTAINER[className].guards[procName].add(cast[Guard](guardInst))
 
 # Định nghĩa Controller
-macro Controller*(classStr, body: untyped): untyped =
-  result             = newStmtList()
-  let class: NimNode = ident($classStr)
-  let typeDef = quote do:
-    type `class` = ref object of BaseController
-  result.add quote("@") do: @typeDef
+macro Controller*(classT, body: untyped): untyped =
+  result = newStmtList()
+  let class = 
+    if classT.kind == nnkBracketExpr: ident($classT[0])
+    else:                             ident($classT)
+  let classDef = quote do:
+    type `class` = ref object of BaseController    
+  result.add quote("@") do: @classDef
   let outBody:      NimNode = newStmtList()
   let classIdent:   NimNode = ident($class)
   let classNameStr: string  = $class
-  let metaProcSecion = newStmtList()
+  let metaProcSecion        = newStmtList()
   # Định nghĩa các meta proc
   metaProcSecion.add quote do:
     proc inject[T: BaseSingleton](t: typedesc[T]): T {.gcsafe.} = cast[T](singletonCONTAINER[$t])
   for stmt in body:
+    echo treeRepr stmt
     if stmt.kind == nnkProcDef:
       let procName         = stmt[0]  # Tên hàm
       let generic          = stmt[1]  # Generic params (nếu có)
@@ -242,7 +245,6 @@ macro Controller*(classStr, body: untyped): untyped =
         procBodyNew.add(procBodyOriginal)
         for i in 2..<params[0].len:
           newParams.add(params[0][i])
-        pragmas.add(ident("gcsafe"))  
         let newProc: NimNode = nnkProcDef.newTree(
           procName,     # Tên hàm
           generic,      # Generic params (nếu có)
