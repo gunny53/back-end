@@ -187,8 +187,8 @@ proc registerGuard(className: string, procName: string, guardType: typedesc[Guar
 macro Controller*(classT, body: untyped): untyped =
   result = newStmtList()
   let class = 
-    if classT.kind == nnkBracketExpr: ident($classT[0])
-    else:                             ident($classT)
+    if classT.kind == nnkCall: ident($classT[0])
+    else:                      ident($classT)
   let classDef = quote do:
     type `class` = ref object of BaseController    
   result.add quote("@") do: @classDef

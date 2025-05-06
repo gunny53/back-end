@@ -5,15 +5,13 @@ import ./services/[user, log]
 type UserDto = ref object
   username: string  
 
-Controller Home["api/v1"]:
-  [Inject] userService: UserService
-  [Inject] logger:      LogService
+Controller Home("api/v1"):
 
-  [HttpGet["/index"]]
+  [HttpGet("index")]
   [UseGuards(AuthGuard)]
   proc index() = Http200 "Hello from HomeController! " 
 
-  [HttpPost["/users/:id"]]
+  [HttpPost("users/:id")]
   [UseGuards(AuthGuard)]
   proc users(
     id   {.param.}: int,
@@ -21,7 +19,7 @@ Controller Home["api/v1"]:
     user {.body.}:  UserDto
   ) = Http200 user
 
-  [HttpGet["/account/:id"]]
+  [HttpGet("account/:id")]
   proc accounts(
     id   {.param.}: int,
     name {.query.}: string
