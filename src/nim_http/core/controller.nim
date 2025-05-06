@@ -147,11 +147,11 @@ proc parseParamStmt(identName: NimNode, identNameStr: string, identType: NimNode
   let identTypeStr = $identType
   let body         = newStmtList()
   case identTypeStr
-  of "int", "int32", "int64":
+  of $int, $int32, $int64:
     body.add quote do: parseInt(this.params[`identNameStr`])
-  of "float", "float32", "float64":
+  of $float, $float32, $float64:
     body.add quote do: parseFloat(this.params[`identNameStr`])
-  of "bool":
+  of $bool:
     body.add quote do: parseBool(this.params[`identNameStr`])
   else: body.add quote do: this.params[`identNameStr`]
   result = quote do:
@@ -227,13 +227,13 @@ macro Controller*(classStr, body: untyped): untyped =
                 # Bước 1.1: Khởi tạo default value cho các params của proc, tránh báo lỗi compile 
                 let remakeParamWithDefaulValue = newIdentDefs(ident($identName), ident($identType), defaultVal)
                 newParams.add(remakeParamWithDefaulValue)
-                # Bước 2: generate code gán giá trị
+                # Bước 2: Kiểm tra các prama của param và gán giá trị
                 let identNameStr = $identName
                 if pragmaNode.len > 0:
                   let pragmaNodeStr = $pragmaNode[0]
                   procBodyNew.add case pragmaNodeStr:
                   of $ParamPragma.param: parseParamStmt(identName, identNameStr, identType)
-                  of $ParamPragma.query: parseParamStmt(identName, identNameStr, identType)
+                  of $ParamPragma.query: parseQueryStmt(identName, identNameStr, identType, defaultVal)
                   of $ParamPragma.body:   parseBodyStmt(identName, identNameStr, identType)
                   else: newEmptyNode()
               else:

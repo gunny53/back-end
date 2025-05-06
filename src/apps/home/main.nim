@@ -17,8 +17,8 @@ Controller Home:
   ) {.post("/users/:id").} =
     Ok user
 
-  proc accounts(id {.param.}: int) {.get("/account/:id").} =
-    Ok "Hello from accounts! " & $id
+  proc accounts(id {.param.}: int, name {.query.}: string) {.get("/account/:id").} =
+    Ok "Hello from accounts! " & $id & ", name = " & name
 
   proc html() {.get.} =
     let userService = inject(UserService)
