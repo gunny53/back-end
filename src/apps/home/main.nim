@@ -6,6 +6,8 @@ type UserDto = ref object
   username: string  
 
 Controller Home["api/v1"]:
+  [Inject] userService: UserService
+  [Inject] logger:      LogService
 
   [HttpGet["/index"]]
   [UseGuards(AuthGuard)]
