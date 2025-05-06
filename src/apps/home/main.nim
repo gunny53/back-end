@@ -8,19 +8,21 @@ type UserDto = ref object
 Controller Home:
 
   proc index() {.get("/index"), useGuards(AuthGuard).} =
-    Ok "Hello from HomeController! " 
+    Http200 "Hello from HomeController! " 
 
   proc users(
     id   {.param.}: int,
     name {.query.}: string,
     user {.body.}:  UserDto
   ) {.post("/users/:id").} =
-    Ok user
+    Http200 user
 
   proc accounts(id {.param.}: int, name {.query.}: string) {.get("/account/:id").} =
-    Ok "Hello from accounts! " & $id & ", name = " & name
+    if name == "":
+      Http400 "erro"
+    Http200 "Hello from accounts! " & $id & ", name = " & name
 
   proc html() {.get.} =
     let userService = inject(UserService)
     echo userService.name
-    Ok "<html>dm</html>"
+    Http200 "<html>dm</html>"

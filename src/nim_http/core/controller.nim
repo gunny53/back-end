@@ -24,12 +24,12 @@ let CONTAINER: TableRef[string, BaseController] = newTable[string, BaseControlle
 proc send(this: BaseController, code: HttpCode, data: string): void = discard this.request.respond(code, data)
 
 # Các template tương ứng với các status code thông dụng
-template Ok*        (content): untyped = this.response.send(Http200, content)
-template BadRequest*(content): untyped = this.response.send(Http400, content)
-template NoContent* ():        untyped = this.request.respond(Http204)
-template Created*(content):    untyped = this.response.send(Http201, content)
-template Forbidden*(content):  untyped = this.response.send(Http403, content)
-template NotFound*(content):   untyped = this.response.send(Http404, content)
+template Http200*(content): untyped = this.response.send(Http200, content)
+template Http400*(content): untyped = this.response.send(Http400, content)
+template Http204*():        untyped = this.request.respond(Http204)
+template Http201*(content): untyped = this.response.send(Http201, content)
+template Http403*(content): untyped = this.response.send(Http403, content)
+template Http404*(content): untyped = this.response.send(Http404, content)
 
 # Hàm xử lý nghiệp vụ của controller khi đã vượt qua các tầng xác thực (guards)
 proc invoke*(this: BaseController, handler: auto): Future[void] =
