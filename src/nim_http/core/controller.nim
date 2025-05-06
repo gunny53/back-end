@@ -1,5 +1,5 @@
 import macros, asyncdispatch, asynchttpserver, macrocache, tables, sequtils, di, strutils, utils, uri, json
-import guard, re, exception, response
+import guard, re, exception, response, sugar
 
 # Định nghĩa kiểu của 1 controller cơ bản
 # BaseController là lớp cơ sở cho các controller khác, chứa các thuộc tính và phương thức chung
@@ -80,7 +80,7 @@ proc resolve*(this: RouteDetail, request: Request): Future[void] =
   this.delegate.instance.processRequest(request).invoke(this.delegate.handler)
 
 # Lưu thông tin function handler cho request, bao gồm controller instance, guards, handler function
-macro mix[T: BaseController](ctlClass: typedesc[T], handler: untyped): ControllerDelegate =
+macro collect[T: BaseController](ctlClass: typedesc[T], handler: untyped): ControllerDelegate =
   let methodName = $handler
   result         = quote do:
     # Ép kiểu về kiểu gốc
@@ -130,7 +130,7 @@ proc register(httpMethod: HttpMethod, route: RouteItem) =
   )
 
 # Hàm xử lý request tại tầng router
-proc process*(request: Request): Future[void] {.async.} =
+proc process*(request: Request): Future[void] {.async, gcsafe.} =
   for _, route in routeTree.pairs:
     if match(request.url.path, route.pattern.regex):
       if route.httpMethod == request.reqMethod:
@@ -193,20 +193,11 @@ macro Controller*(classStr, body: untyped): untyped =
   let outBody:      NimNode = newStmtList()
   let classIdent:   NimNode = ident($class)
   let classNameStr: string  = $class
+  let metaProcSecion = newStmtList()
+  # Định nghĩa các meta proc
+  metaProcSecion.add quote do:
+    proc inject[T: BaseSingleton](t: typedesc[T]): T {.gcsafe.} = cast[T](singletonCONTAINER[$t])
   for stmt in body:
-    if stmt.kind == nnkLetSection:
-      echo treeRepr stmt
-      let identDefs = stmt[0]
-      for identDef in identDefs:
-        let typ = identDefs[1]
-        if identDef.kind == nnkPragmaExpr:
-          let identName   = identDef[0]
-          let identPragma = identDef[1][0]
-          if identPragma.eqIdent("inject"):
-            let typStr = $typ
-            result.add newLetStmt(identName, quote do:
-                cast[`typ`](singletonCONTAINER[`typStr`]))
-            
     if stmt.kind == nnkProcDef:
       let procName         = stmt[0]  # Tên hàm
       let generic          = stmt[1]  # Generic params (nếu có)
@@ -230,22 +221,21 @@ macro Controller*(classStr, body: untyped): untyped =
                 let pragmaNode = param[0][1]
                 # Bước 1: tạo khai báo biến không khởi tạo
                 let defaultVal = case $identType:
-                  of   "int", "int32", "int64", "float", "float32", "float64": newLit(0)
-                  of   "string": newStrLitNode("")
+                  of   $int, $int32, $int64, $float, $float32, $float64: newLit(0)
+                  of   $string: newStrLitNode("")
                   else: newNilLit()
-                let i = newIdentDefs(ident($identName), ident($identType), defaultVal)
-                newParams.add(i)
+                # Bước 1.1: Khởi tạo default value cho các params của proc, tránh báo lỗi compile 
+                let remakeParamWithDefaulValue = newIdentDefs(ident($identName), ident($identType), defaultVal)
+                newParams.add(remakeParamWithDefaulValue)
                 # Bước 2: generate code gán giá trị
                 let identNameStr = $identName
-                if pragmaNode.len > 0 and pragmaNode[0].eqIdent($ParamPragma.param):
-                  let parseStmt = parseParamStmt(identName, identNameStr, identType)
-                  procBodyNew.add(parseStmt)
-                elif pragmaNode.len > 0 and pragmaNode[0].eqIdent($ParamPragma.query):
-                  let parseStmt = parseQueryStmt(identName, identNameStr, identType, defaultVal)
-                  procBodyNew.add(parseStmt)  
-                elif pragmaNode.len > 0 and pragmaNode[0].eqIdent($ParamPragma.body):
-                  let parseStmt = parseBodyStmt(identName, identNameStr, identType)
-                  procBodyNew.add(parseStmt)   
+                if pragmaNode.len > 0:
+                  let pragmaNodeStr = $pragmaNode[0]
+                  procBodyNew.add case pragmaNodeStr:
+                  of $ParamPragma.param: parseParamStmt(identName, identNameStr, identType)
+                  of $ParamPragma.query: parseParamStmt(identName, identNameStr, identType)
+                  of $ParamPragma.body:   parseBodyStmt(identName, identNameStr, identType)
+                  else: newEmptyNode()
               else:
                 let i = newIdentDefs(ident($param[0]), ident($param[1]), newLit(0))
                 newParams.add(i)
@@ -265,11 +255,12 @@ macro Controller*(classStr, body: untyped): untyped =
         outBody.add(newProc)
       else:
         outBody.add(stmt)
-
+  # Khởi tạo controller instance, đăng ký vào container
   let init: NimNode = quote do:
     let inst = new `classIdent`
     CONTAINER[`classNameStr`] = cast[BaseController](inst)
   # Cài đặt init controller và đăng ký các route
+  result.add(metaProcSecion)
   result.add(outBody)
   result.add(init)
   let lBody = newStmtList()
@@ -283,17 +274,17 @@ macro Controller*(classStr, body: untyped): untyped =
         if pragma.kind == nnkIdent:
           let path = "/"
           if pragma.eqIdent("get"):
-            lBody.add quote do: register(HttpGet, (RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`))))
-        if pragma.kind == nnkCall:
+            lBody.add quote do: register(HttpGet, (RouteItem(path: `path`, delegate: collect(`class`, `procNameStriped`))))
+        elif pragma.kind == nnkCall:
           let path = $pragma[1]
           if pragma[0].eqIdent("get"):
-            lBody.add quote do: register(HttpGet, (RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`))))
+            lBody.add quote do: register(HttpGet, (RouteItem(path: `path`, delegate: collect(`class`, `procNameStriped`))))
           elif pragma[0].eqIdent("post"):
-            lBody.add quote do: register(HttpPost, (RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`))))
+            lBody.add quote do: register(HttpPost, (RouteItem(path: `path`, delegate: collect(`class`, `procNameStriped`))))
           elif pragma[0].eqIdent("put"):
-            lBody.add quote do: register(HttpPut, (RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`))))
+            lBody.add quote do: register(HttpPut, (RouteItem(path: `path`, delegate: collect(`class`, `procNameStriped`))))
           elif pragma[0].eqIdent("delete"):
-            lBody.add quote do: register(HttpDelete, (RouteItem(path: `path`, delegate: mix(`class`, `procNameStriped`))))
+            lBody.add quote do: register(HttpDelete, (RouteItem(path: `path`, delegate: collect(`class`, `procNameStriped`))))
       for pragma in pragmas:
         if pragma.kind == nnkIdent:
           discard # cần triển khai kiểm tra nếu chỉ khai báo là .get. thì mặc định sẽ hiểu path là "/"
@@ -308,6 +299,7 @@ macro Controller*(classStr, body: untyped): untyped =
                 lBody.add quote do:
                   registerGuard(`classNameStr`, `procNameStr`, `brk`)
   result.add(lBody)
+  # echo treeRepr result
 # Method pramga
 template get*    (path: string = "/") {.pragma.}
 template post*   (path: string = "/") {.pragma.}

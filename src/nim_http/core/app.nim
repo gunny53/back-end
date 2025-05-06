@@ -22,7 +22,7 @@ proc listen*(this: NimHttpApplication) =
   waitFor newAsyncHttpServer().serve(
     port     = Port(this.settings.port),
     address  = this.settings.host,
-    callback = proc (request: Request) {.async.} = 
+    callback = proc (request: Request) {.async, gcsafe.} = 
     try:
       await request.process
     except HttpException as e:
