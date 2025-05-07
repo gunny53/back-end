@@ -15,7 +15,7 @@ var routeTree {.threadvar.}: TableRef[string, RouteDetail[BaseController]]
 routeTree = newTable[string, RouteDetail[BaseController]]()
 
 # Lưu thông tin function handler cho request, bao gồm controller instance, guards, handler function
-macro collect[T: BaseController](ctlClass: typedesc[T], handler: untyped): ControllerDelegate[T] =
+macro collect[T](ctlClass: typedesc[T], handler: untyped): ControllerDelegate[T] =
   let className  = $ctlClass 
   let methodName = $handler
   result         = quote do:
@@ -24,7 +24,7 @@ macro collect[T: BaseController](ctlClass: typedesc[T], handler: untyped): Contr
       let ctrl = cast[`ctlClass`](this)
       `handler`(ctrl)
     # Phát hiện các guards và lưu vào bộ nhớ quản lý guards của instance controller
-    let guards = if CONTAINER[`className`].guards.hasKey(`methodName`): CONTAINER[`className`].guards[`methodName`] else: @[]
+    let guards = if CONTAINER[`className`].guards.hasKey(`methodName`): CONTAINER[`className`].guards[`methodName`] else: @[] 
     ControllerDelegate[`ctlClass`](
       instance: cast[`ctlClass`](CONTAINER[`className`]),
       handler:  hand,
@@ -53,7 +53,7 @@ proc parseRoutePattern(pattern: string): (RoutePattern, string) =
   result = (RoutePattern(raw: pattern, regex: re(regexStr), paramSegments: paramSegments), regexStr)
 
 # Đăng ký route
-proc register[T: BaseController](httpMethod: HttpMethod, route: RouteRegister) =
+proc register[T](httpMethod: HttpMethod, route: RouteRegister[T]) =
   let (pattern, key) = parseRoutePattern(route.path)
   routeTree[key]     = cast[RouteDetail[BaseController]](RouteDetail[T](
     httpMethod: httpMethod,
@@ -120,15 +120,13 @@ proc registerRoute(httpMethod: string, path: string, class: NimNode, procName: s
   result = (
     case httpMethod
     of "HttpGet":    
-      quote do: 
-        let v = collect[`class`](`class`, `procNameStriped`)
-        register[`class`](HttpGet,    (RouteRegister[`class`](path: `path`, delegate: v)))
+      quote do: register[`class`](HttpGet,    (RouteRegister[`class`](path: `path`, delegate: collect(`class`, `procNameStriped`))))
     of "HttpPost":   
-      quote do: register[`class`](HttpPost,   (RouteRegister[`class`](path: `path`, delegate: collect[`class`](`class`, `procNameStriped`))))
+      quote do: register[`class`](HttpPost,   (RouteRegister[`class`](path: `path`, delegate: collect(`class`, `procNameStriped`))))
     of "HttpPut":    
-      quote do: register[`class`](HttpPut,    (RouteRegister[`class`](path: `path`, delegate: collect[`class`](`class`, `procNameStriped`))))
+      quote do: register[`class`](HttpPut,    (RouteRegister[`class`](path: `path`, delegate: collect(`class`, `procNameStriped`))))
     of "HttpDelete": 
-      quote do: register[`class`](HttpDelete, (RouteRegister[`class`](path: `path`, delegate: collect[`class`](`class`, `procNameStriped`))))
+      quote do: register[`class`](HttpDelete, (RouteRegister[`class`](path: `path`, delegate: collect(`class`, `procNameStriped`))))
     else: newEmptyNode()
   )
 

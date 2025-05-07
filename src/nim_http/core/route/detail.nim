@@ -1,7 +1,7 @@
-import asynchttpserver, pattern, delegate, asyncdispatch, ../controller/base
+import asynchttpserver, pattern, delegate, asyncdispatch
 
 # Lưu thông tin chi tiết của 1 route
-type RouteDetail*[T: BaseController] = ref object
+type RouteDetail*[T] = ref object
   httpMethod*: HttpMethod            # Phương thức HTTP (GET, POST, etc.)
   pattern*:    RoutePattern          # Pattern của route
   delegate*:   ControllerDelegate[T] # Hàm handler xử lý request cho route
