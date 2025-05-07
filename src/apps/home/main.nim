@@ -1,6 +1,6 @@
-import ../../nim_http/core/[controller, di, guard, exception]
-import ../../libs/auth/auth_guard, options, json
-import ./services/[user, log]
+import ../../nim_http/core/controller
+import ../../libs/auth/auth_guard
+import ./services/user
 
 type UserDto = ref object
   username: string  
@@ -8,16 +8,18 @@ type UserDto = ref object
 Controller Home("api/v1"):
 
   [HttpGet("index")]
-  [UseGuards(AuthGuard)]
+  [UseGuard(AuthGuard)]
   proc index() = Http200 "Hello from HomeController! " 
 
   [HttpPost("users/:id")]
-  [UseGuards(AuthGuard)]
+  [UseGuard(AuthGuard)]
+  [Test]
   proc users(
     id   {.param.}: int,
     name {.query.}: string,
     user {.body.}:  UserDto
-  ) = Http200 user
+  ) = 
+    Http200 user
 
   [HttpGet("account/:id")]
   proc accounts(

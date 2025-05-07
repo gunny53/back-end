@@ -12,8 +12,3 @@ macro Injectable*(body: untyped): untyped =
     let bodyType = $body
     result.add quote do: singletonCONTAINER[`bodyType`] = new(`body`)
   else: discard
-
-# template inject*(): BaseSingleton {.pragma.}
-
-template singleton*() {.pragma.}
-template transient*() {.pragma.}

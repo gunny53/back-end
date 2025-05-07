@@ -9,4 +9,4 @@ method catch*(e: HttpErrorHandle, req: Request): Future[void] {.async, gcsafe.} 
   let mess = %*{"statusCode": e.exception.statusCode.int, "message": e.exception.message}
   if e.exception of NotFoundException:
     await req.respond(e.exception.statusCode, $mess, req.headers)
-  else: await req.respond(e.exception.statusCode, $mess, req.headers)
+  else: await req.respond(e.exception.statusCode, $mess, {"Content-Type": "application/json"}.newHttpHeaders())
