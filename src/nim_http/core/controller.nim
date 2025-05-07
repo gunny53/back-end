@@ -44,15 +44,15 @@ proc parseBodyStmt(identName: NimNode, identNameStr: string, identType: NimNode)
 
 proc registerGuard(className: string, procName: string, guardType: typedesc[Guard]) =
   let guardInst = new guardType
-  if not CONTAINER[className].guards.hasKey(procName):
-    CONTAINER[className].guards[procName] = @[]
-  CONTAINER[className].guards[procName].add(cast[Guard](guardInst))
+  if not controllerRegistry[className].guards.hasKey(procName):
+    controllerRegistry[className].guards[procName] = @[]
+  controllerRegistry[className].guards[procName].add(cast[Guard](guardInst))
 
 proc registerRoute(httpMethod: string, path: string, class: NimNode, procName: string): NimNode =
   let procNameStriped = ident(procName)
   result = (
     case httpMethod
-    of "HttpGet":    
+    of "HttpGet":
       quote do: register(HttpGet,    (RouteRegister(path: `path`, delegate: collect(`class`, `procNameStriped`))))
     of "HttpPost":   
       quote do: register(HttpPost,   (RouteRegister(path: `path`, delegate: collect(`class`, `procNameStriped`))))
@@ -77,11 +77,11 @@ macro Controller*(classT, body: untyped): untyped =
   let metaProcSecion        = newStmtList()
   # Định nghĩa các meta proc
   metaProcSecion.add quote do:
-    proc inject[T: BaseSingleton](t: typedesc[T]): T {.gcsafe.} = cast[T](singletonCONTAINER[$t])
-  # Khởi tạo controller instance, đăng ký vào container
+    proc inject[T: BaseSingleton](t: typedesc[T]): T {.gcsafe.} = cast[T](singletonRegistry[$t])
+  # Khởi tạo controller instance, đăng ký vào controllerRegistry
   let analyzeBody: NimNode = quote do:
     let inst = new `classIdent`
-    CONTAINER[`classNameStr`] = cast[BaseController](inst)  
+    controllerRegistry[`classNameStr`] = cast[BaseController](inst)  
   var pendingAttrs: seq[NimNode] = @[]
   const httpMethodsAttr = @["HttpGet", "HttpPost", "HttpPut", "HttpDelete"]
   const useGuardAttr    = @["UseGuard"]
@@ -147,7 +147,7 @@ macro Controller*(classT, body: untyped): untyped =
       else:
         outBody.add(stmt)
       if pendingAttrs.len > 0:
-        let procNameStr       = ($procName).strip(chars = {'*'})
+        let procNameStr = ($procName).strip(chars = {'*'})
         for attr in pendingAttrs:
           if attr[0].kind == nnkCall:
             let identKey = attr[0][0]

@@ -29,4 +29,4 @@ proc invoke*(this: BaseController, handler: auto): Future[void] =
   return fn(this)
 
 # Bảng lưu các inst controller theo tên
-let CONTAINER*: TableRef[string, BaseController] = newTable[string, BaseController]()
+let controllerRegistry*: TableRef[string, BaseController] = newTable[string, BaseController]()

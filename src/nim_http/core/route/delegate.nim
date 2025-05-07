@@ -15,9 +15,9 @@ macro collect*[T: BaseController](ctlClass: typedesc[T], handler: untyped): Cont
       let ctrl = cast[`ctlClass`](this)
       `handler`(ctrl)
     # Phát hiện các guards và lưu vào bộ nhớ quản lý guards của instance controller
-    let guards = if CONTAINER[`className`].guards.hasKey(`methodName`): CONTAINER[`className`].guards[`methodName`] else: @[] 
+    let guards = if controllerRegistry[`className`].guards.hasKey(`methodName`): controllerRegistry[`className`].guards[`methodName`] else: @[] 
     ControllerDelegate(
-      instance: cast[`ctlClass`](CONTAINER[`className`]),
+      instance: cast[`ctlClass`](controllerRegistry[`className`]),
       handler:  hand,
       guards:   guards
     )
