@@ -1,16 +1,7 @@
 import macros, asyncdispatch, asynchttpserver, macrocache, tables, sequtils, di, strutils, utils, uri, json, options
-import guard, re, exception, response
-
-# Định nghĩa kiểu của 1 controller cơ bản
-# BaseController là lớp cơ sở cho các controller khác, chứa các thuộc tính và phương thức chung
-type BaseController* = ref object of RootObj
-  # Đối tượng Request đại diện cho HTTP request
-  request*: Request
-  # Bảng lưu trữ các tham số của request (path, params binds)
-  params*:  TableRef[string, string]     = newTable[string, string]()
-  # Bảng lưu trữ các guards cho từng phương thức
-  guards*:  TableRef[string, seq[Guard]] = newTable[string, seq[Guard]]()
-  response: Response = Response()
+import guard, re, exception, route
+import controller/base as base
+export base
 
 # Định nghĩa các pragma cho param (các loại tham số trong controller)
 type ParamPragma = enum
@@ -19,78 +10,23 @@ type ParamPragma = enum
 # Bảng lưu các inst controller theo tên
 let CONTAINER: TableRef[string, BaseController] = newTable[string, BaseController]()
 
-# Hàm gửi response cho client, trả về status code và dữ liệu
-proc send(this: BaseController, code: HttpCode, data: string): void = discard this.request.respond(code, data)
-
-# Các template tương ứng với các status code thông dụng
-template Http200*(content): untyped = this.response.send(Http200, content)
-template Http400*(content): untyped = this.response.send(Http400, content)
-template Http204*():        untyped = this.request.respond(Http204)
-template Http201*(content): untyped = this.response.send(Http201, content)
-template Http403*(content): untyped = this.response.send(Http403, content)
-template Http404*(content): untyped = this.response.send(Http404, content)
-
-# Hàm xử lý nghiệp vụ của controller khi đã vượt qua các tầng xác thực (guards)
-proc invoke*(this: BaseController, handler: auto): Future[void] =
-  let fn = proc (this: BaseController): Future[void] {.closure, async.} = handler(this)
-  return fn(this)
-
-# Hàm gắn request vào controller
-proc processRequest*(this: BaseController, req: Request): BaseController =
-  this.request          = req
-  this.response.request = req
-  return this
-
-# Định nghĩa kiểu RoutePattern dùng để lưu trữ thông tin pattern của route
-# Mỗi route có thể có tham số động (parameter) trong URL, đây là cách xử lý những tham số đó.
-type
-  # Lưu thông tin meta của route dưới dạng regex pattern
-  RoutePattern* = ref object
-    raw*:           string      # Đường dẫn gốc của route
-    regex*:         Regex       # Biểu thức chính quy dùng để so khớp URL
-    paramSegments*: seq[string] # Các tham số động trong đường dẫn
-
-  # Lưu thông tin chi tiết của 1 route
-  RouteDetail* = ref object
-    httpMethod*: HttpMethod         # Phương thức HTTP (GET, POST, etc.)
-    pattern*:    RoutePattern       # Pattern của route
-    delegate*:   ControllerDelegate # Hàm handler xử lý request cho route
-
-  # Lưu thông tin của 1 route
-  RouteItem* = ref object
-    path:     string             # Đường dẫn của route
-    delegate: ControllerDelegate # Delegate cho route (controller + handler)
-
-  # Lưu thông tin của controller
-  ControllerDelegate* = ref object
-    instance*: BaseController                                                # Instance của controller
-    handler*:  proc (this: BaseController): Future[void] {.gcsafe, closure.} # Hàm xử lý request
-    guards*:   seq[Guard]                                                    # Các guards áp dụng cho phương thức
-
 # Lưu trữ các route trong bộ nhớ
-var routeTree {.threadvar.}: TableRef[string, RouteDetail]
-routeTree = newTable[string, RouteDetail]()
-
-# Hàm xử lý request, kiểm tra các guards, middleware, interceptors trước khi thực thi nghiệp vụ ở controller
-proc resolve*(this: RouteDetail, request: Request): Future[void] =
-  if this.delegate.guards.len > 0:
-    for guard in this.delegate.guards:
-      discard guard.canActivate(request)
-  this.delegate.instance.processRequest(request).invoke(this.delegate.handler)
+var routeTree {.threadvar.}: TableRef[string, RouteDetail[BaseController]]
+routeTree = newTable[string, RouteDetail[BaseController]]()
 
 # Lưu thông tin function handler cho request, bao gồm controller instance, guards, handler function
-macro collect[T: BaseController](ctlClass: typedesc[T], handler: untyped): ControllerDelegate =
+macro collect[T: BaseController](ctlClass: typedesc[T], handler: untyped): ControllerDelegate[T] =
   let className  = $ctlClass 
   let methodName = $handler
   result         = quote do:
     # Ép kiểu về kiểu gốc
-    let hand = proc (this: BaseController): Future[void] {.gcsafe, closure.} =
+    let hand = proc (this: `ctlClass`): Future[void] {.gcsafe, closure.} =
       let ctrl = cast[`ctlClass`](this)
       `handler`(ctrl)
     # Phát hiện các guards và lưu vào bộ nhớ quản lý guards của instance controller
-    let guards = if CONTAINER[`className`].guards.hasKey(`methodName`): CONTAINER[`className`].guards[`methodName`] else: @[] 
-    ControllerDelegate(
-      instance: CONTAINER[`className`],
+    let guards = if CONTAINER[`className`].guards.hasKey(`methodName`): CONTAINER[`className`].guards[`methodName`] else: @[]
+    ControllerDelegate[`ctlClass`](
+      instance: cast[`ctlClass`](CONTAINER[`className`]),
       handler:  hand,
       guards:   guards
     )
@@ -117,13 +53,13 @@ proc parseRoutePattern(pattern: string): (RoutePattern, string) =
   result = (RoutePattern(raw: pattern, regex: re(regexStr), paramSegments: paramSegments), regexStr)
 
 # Đăng ký route
-proc register(httpMethod: HttpMethod, route: RouteItem) =
+proc register[T: BaseController](httpMethod: HttpMethod, route: RouteRegister) =
   let (pattern, key) = parseRoutePattern(route.path)
-  routeTree[key]     = RouteDetail(
+  routeTree[key]     = cast[RouteDetail[BaseController]](RouteDetail[T](
     httpMethod: httpMethod,
     pattern:    pattern,
     delegate:   route.delegate
-  )
+  ))
 
 # Hàm xử lý request tại tầng router
 proc process*(request: Request): Future[void] {.async, gcsafe.} =
@@ -184,13 +120,15 @@ proc registerRoute(httpMethod: string, path: string, class: NimNode, procName: s
   result = (
     case httpMethod
     of "HttpGet":    
-      quote do: register(HttpGet,    (RouteItem(path: `path`, delegate: collect(`class`, `procNameStriped`))))
+      quote do: 
+        let v = collect[`class`](`class`, `procNameStriped`)
+        register[`class`](HttpGet,    (RouteRegister[`class`](path: `path`, delegate: v)))
     of "HttpPost":   
-      quote do: register(HttpPost,   (RouteItem(path: `path`, delegate: collect(`class`, `procNameStriped`))))
+      quote do: register[`class`](HttpPost,   (RouteRegister[`class`](path: `path`, delegate: collect[`class`](`class`, `procNameStriped`))))
     of "HttpPut":    
-      quote do: register(HttpPut,    (RouteItem(path: `path`, delegate: collect(`class`, `procNameStriped`))))
+      quote do: register[`class`](HttpPut,    (RouteRegister[`class`](path: `path`, delegate: collect[`class`](`class`, `procNameStriped`))))
     of "HttpDelete": 
-      quote do: register(HttpDelete, (RouteItem(path: `path`, delegate: collect(`class`, `procNameStriped`))))
+      quote do: register[`class`](HttpDelete, (RouteRegister[`class`](path: `path`, delegate: collect[`class`](`class`, `procNameStriped`))))
     else: newEmptyNode()
   )
 
@@ -219,7 +157,8 @@ macro Controller*(classT, body: untyped): untyped =
   for stmt in body:
     if stmt.kind == nnkBracket:
       let attr = if stmt[0].kind == nnkCall: stmt[0][0] else: stmt[0]
-      assert(not(($attr notin httpMethodsAttr) and ($attr notin useGuardAttr)), "[ERROR] Attribute" & $attr & " invalid, " & (httpMethodsAttr & useGuardAttr).join(", "))
+      if ($attr notin httpMethodsAttr) and ($attr notin useGuardAttr):
+        error "[ERROR] Attribute " & $attr & " invalid, " & (httpMethodsAttr & useGuardAttr).join(", ")
       pendingAttrs.add(stmt)
     elif stmt.kind == nnkProcDef:
       let procName         = stmt[0]  # Tên hàm

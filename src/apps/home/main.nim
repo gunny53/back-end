@@ -13,7 +13,6 @@ Controller Home("api/v1"):
 
   [HttpPost("users/:id")]
   [UseGuard(AuthGuard)]
-  [Test]
   proc users(
     id   {.param.}: int,
     name {.query.}: string,
