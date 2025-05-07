@@ -7,73 +7,6 @@ export base
 type ParamPragma = enum
   body, query, param
 
-# Bảng lưu các inst controller theo tên
-let CONTAINER: TableRef[string, BaseController] = newTable[string, BaseController]()
-
-# Lưu trữ các route trong bộ nhớ
-var routeTree {.threadvar.}: TableRef[string, RouteDetail[BaseController]]
-routeTree = newTable[string, RouteDetail[BaseController]]()
-
-# Lưu thông tin function handler cho request, bao gồm controller instance, guards, handler function
-macro collect[T](ctlClass: typedesc[T], handler: untyped): ControllerDelegate[T] =
-  let className  = $ctlClass 
-  let methodName = $handler
-  result         = quote do:
-    # Ép kiểu về kiểu gốc
-    let hand = proc (this: `ctlClass`): Future[void] {.gcsafe, closure.} =
-      let ctrl = cast[`ctlClass`](this)
-      `handler`(ctrl)
-    # Phát hiện các guards và lưu vào bộ nhớ quản lý guards của instance controller
-    let guards = if CONTAINER[`className`].guards.hasKey(`methodName`): CONTAINER[`className`].guards[`methodName`] else: @[] 
-    ControllerDelegate[`ctlClass`](
-      instance: cast[`ctlClass`](CONTAINER[`className`]),
-      handler:  hand,
-      guards:   guards
-    )
-
-# Hàm hỗ trợ chuyển đổi url path string sang regex
-proc parseToRegex(path: string): (seq[string], string) =
-  var 
-    regexStr                   = "^"
-    paramSegments: seq[string] = @[]
-  let parts = path.strip(chars = {'/'}).split("/")
-  for part in parts:
-    if part.startsWith(":"):
-      regexStr.add("/([^/]+)")
-      let name = part[1..^1]
-      paramSegments.add(name)
-    else:
-      regexStr.add("/" & part)
-  regexStr.add("$")
-  return (paramSegments, regexStr)
-
-# Hàm lưu thông tin của url (đã chuyển đổi sang regex pattern), bao gồm params binds
-proc parseRoutePattern(pattern: string): (RoutePattern, string) =
-  let (paramSegments, regexStr) = parseToRegex(pattern)
-  result = (RoutePattern(raw: pattern, regex: re(regexStr), paramSegments: paramSegments), regexStr)
-
-# Đăng ký route
-proc register[T](httpMethod: HttpMethod, route: RouteRegister[T]) =
-  let (pattern, key) = parseRoutePattern(route.path)
-  routeTree[key]     = cast[RouteDetail[BaseController]](RouteDetail[T](
-    httpMethod: httpMethod,
-    pattern:    pattern,
-    delegate:   route.delegate
-  ))
-
-# Hàm xử lý request tại tầng router
-proc process*(request: Request): Future[void] {.async, gcsafe.} =
-  for _, route in routeTree.pairs:
-    if match(request.url.path, route.pattern.regex):
-      if route.httpMethod == request.reqMethod:
-        var matches = newSeq[string](route.pattern.paramSegments.len + 1)
-        if match(request.url.path, route.pattern.regex, matches):
-          for i, name in route.pattern.paramSegments:
-            route.delegate.instance.params[name] = matches[i]
-          await route.resolve(request)
-      else: raise METHOD_NOT_ALLOWED()
-  raise NOT_FOUND()
-
 # Hàm parse bind param
 proc parseParamStmt(identName: NimNode, identNameStr: string, identType: NimNode): NimNode =
   let identTypeStr = $identType
@@ -120,13 +53,13 @@ proc registerRoute(httpMethod: string, path: string, class: NimNode, procName: s
   result = (
     case httpMethod
     of "HttpGet":    
-      quote do: register[`class`](HttpGet,    (RouteRegister[`class`](path: `path`, delegate: collect(`class`, `procNameStriped`))))
+      quote do: register(HttpGet,    (RouteRegister(path: `path`, delegate: collect(`class`, `procNameStriped`))))
     of "HttpPost":   
-      quote do: register[`class`](HttpPost,   (RouteRegister[`class`](path: `path`, delegate: collect(`class`, `procNameStriped`))))
+      quote do: register(HttpPost,   (RouteRegister(path: `path`, delegate: collect(`class`, `procNameStriped`))))
     of "HttpPut":    
-      quote do: register[`class`](HttpPut,    (RouteRegister[`class`](path: `path`, delegate: collect(`class`, `procNameStriped`))))
+      quote do: register(HttpPut,    (RouteRegister(path: `path`, delegate: collect(`class`, `procNameStriped`))))
     of "HttpDelete": 
-      quote do: register[`class`](HttpDelete, (RouteRegister[`class`](path: `path`, delegate: collect(`class`, `procNameStriped`))))
+      quote do: register(HttpDelete, (RouteRegister(path: `path`, delegate: collect(`class`, `procNameStriped`))))
     else: newEmptyNode()
   )
 

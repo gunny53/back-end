@@ -27,3 +27,6 @@ template Http404*(content): untyped = this.response.send(Http404, content)
 proc invoke*(this: BaseController, handler: auto): Future[void] =
   let fn = proc (this: BaseController): Future[void] {.closure, async.} = handler(this)
   return fn(this)
+
+# Bảng lưu các inst controller theo tên
+let CONTAINER*: TableRef[string, BaseController] = newTable[string, BaseController]()
