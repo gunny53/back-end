@@ -11,18 +11,8 @@ macro singleton*(classT, body: untyped): untyped =
   let class     = if classT.kind == nnkInfix: classT[1] else: classT
   let baseClass = if classT.len < 2: ident("SingletonObj") else: classT[2]
   let classDef  = quote do:
-    type `class`*               = ref object of `baseClass`
-  echo treeRepr classT
-  
-  for stmt in body:
-    echo stmt.kind
-    echo "vc"
-    if stmt.kind == nnkAsgn:
-      let fields = stmt
-      echo treeRepr fields
-      classDef.insert(1, quote("@") do: @fields)
+    type `class`* = ref object of `baseClass`
       
-  dumpTree classDef
   result.add quote("@") do:
     @classDef
     @body
