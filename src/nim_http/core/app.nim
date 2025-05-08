@@ -1,6 +1,8 @@
-import asynchttpserver, asyncdispatch, strutils
+import asynchttpserver, asyncdispatch, strutils, logging
 import route
 import exception
+
+addHandler(newConsoleLogger())
 
 type NimHttpApplicationErrorHandle* = ref object of RootObj
   exception*: HttpException
@@ -11,18 +13,26 @@ method catch*(this: NimHttpApplicationErrorHandle, req: Request): Future[void] {
 type NimHttpApplicationSettings* = ref object of RootObj
   host*:        string = "localhost"
   useHttps:     bool   = false
-  prefixPath:   string = ""
+  basePath:     string = ""
   port*:        int    = 8800
   errorHandle*: NimHttpApplicationErrorHandle
+
+func getHostUrl(this: NimHttpApplicationSettings): string = "http://" & this.host & ":" & $this.port
 
 type NimHttpApplication* = ref object of RootObj
   settings*: NimHttpApplicationSettings
 
-proc listen*(this: NimHttpApplication) =
+proc start*(this: NimHttpApplication) =
+  info """_  _ _ _  _ ____ ____ _  _"""
+  info """|\ | | |\/| |__| [__  |__|"""
+  info """| \| | |  | |  | ___] |  |"""
+  info "Starting server"
+  info "Application is running on " & this.settings.getHostUrl
   waitFor newAsyncHttpServer().serve(
     port     = Port(this.settings.port),
     address  = this.settings.host,
-    callback = proc (request: Request) {.async, gcsafe.} = 
+    callback = proc (request: Request) {.async, gcsafe.} =
+    debug "Incoming request -> route path " & request.url.path
     try:
       await request.process
     except HttpException as e:

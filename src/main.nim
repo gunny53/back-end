@@ -6,4 +6,4 @@ let settings         = NimHttpApplicationSettings()
 settings.host        = "127.0.0.1"
 settings.port        = 8888
 settings.errorHandle = HttpErrorHandle()
-NimHttpApplication(settings: settings).listen
+NimHttpApplication(settings: settings).start

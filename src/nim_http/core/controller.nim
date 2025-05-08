@@ -18,7 +18,8 @@ proc parseParamStmt(identName: NimNode, identNameStr: string, identType: NimNode
     body.add quote do: parseFloat(this.params[`identNameStr`])
   of $bool:
     body.add quote do: parseBool(this.params[`identNameStr`])
-  else: body.add quote do: this.params[`identNameStr`]
+  else:
+    body.add quote do: this.params[`identNameStr`]
   result = quote do:
     let `identName` = (
       try:   `body`
@@ -38,7 +39,7 @@ proc parseQueryStmt(identName: NimNode, identNameStr: string, identType: NimNode
 proc parseBodyStmt(identName: NimNode, identNameStr: string, identType: NimNode): NimNode =
   result = quote do:
     let `identName`: `identType` = (
-      try:    to(parseJson(this.request.body), `identType`)
+      try:   to(parseJson(this.request.body), `identType`)
       except Exception as e: raise BAD_REQUEST(e.msg)
     )
 
@@ -69,7 +70,7 @@ macro Controller*(classT, body: untyped): untyped =
   let class       = if classT.kind == nnkCall: ident($classT[0]) else: ident($classT)
   let routePrefix = if classT.kind == nnkCall: $classT[1]        else: ""
   let classDef = quote do:
-    type `class` = ref object of BaseController
+    type `class`* = ref object of BaseController
   result.add quote("@") do: @classDef
   let outBody:      NimNode = newStmtList()
   let classIdent:   NimNode = ident($class)

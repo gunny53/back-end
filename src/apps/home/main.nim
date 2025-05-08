@@ -33,4 +33,4 @@ Controller Home("api/v1"):
   proc html() =
     let userService = inject(UserService)
     echo userService.name
-    Http200 "<html>dm</html>"
+    Http200 "<html>hello mf</html>"
