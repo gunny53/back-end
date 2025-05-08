@@ -1,14 +1,18 @@
 import macros, asyncdispatch, asynchttpserver, macrocache, tables, sequtils, di, strutils, utils, uri, json, options
-import guard, re, exception, route
+import re, exception, route
 import controller/base as base
 export base
+
+# Constants
+const ROUTE_METHOD_ATTRIBUTE = @["HttpGet", "HttpPost", "HttpPut", "HttpDelete"]
+const USE_GUARD_ATTRIBUTE    = @["UseGuard"]
 
 # Định nghĩa các pragma cho param (các loại tham số trong controller)
 type ParamPragma = enum
   body, query, param
 
 # Hàm parse bind param
-proc parseParamStmt(identName: NimNode, identNameStr: string, identType: NimNode): NimNode =
+func parseParamStmt(identName: NimNode, identNameStr: string, identType: NimNode): NimNode =
   let identTypeStr = $identType
   let body         = newStmtList()
   case identTypeStr
@@ -21,12 +25,9 @@ proc parseParamStmt(identName: NimNode, identNameStr: string, identType: NimNode
   else:
     body.add quote do: this.params[`identNameStr`]
   result = quote do:
-    let `identName` = (
-      try:   `body`
-      except: raise BAD_REQUEST()
-    )
+    let `identName` = try: `body` except Exception as e: raise BAD_REQUEST(e.msg)
 # Hàm parse query
-proc parseQueryStmt(identName: NimNode, identNameStr: string, identType: NimNode, defaultVal: NimNode): NimNode =
+func parseQueryStmt(identName: NimNode, identNameStr: string, identType: NimNode, defaultVal: NimNode): NimNode =
   result = quote do:
     let `identName`: `identType` = this.request.url.query
       .split("&")
@@ -36,30 +37,21 @@ proc parseQueryStmt(identName: NimNode, identNameStr: string, identType: NimNode
       .headOption()
       .flatMap(parseOrNone[`identType`]).getOrElse(`defaultVal`)
 # Hàm parse raw body to Dto class
-proc parseBodyStmt(identName: NimNode, identNameStr: string, identType: NimNode): NimNode =
+func parseBodyStmt(identName: NimNode, identNameStr: string, identType: NimNode): NimNode =
   result = quote do:
-    let `identName`: `identType` = (
-      try:   to(parseJson(this.request.body), `identType`)
-      except Exception as e: raise BAD_REQUEST(e.msg)
-    )
+    let `identName`: `identType` = try: to(parseJson(this.request.body), `identType`) except Exception as e: raise BAD_REQUEST(e.msg)
 
-proc registerGuard(className: string, procName: string, guardType: typedesc[Guard]) =
-  let guardInst = new guardType
-  if not controllerRegistry[className].guards.hasKey(procName):
-    controllerRegistry[className].guards[procName] = @[]
-  controllerRegistry[className].guards[procName].add(cast[Guard](guardInst))
-
-proc registerRoute(httpMethod: string, path: string, class: NimNode, procName: string): NimNode =
+func registerRoute(httpMethod: string, path: string, class: NimNode, procName: string): NimNode =
   let procNameStriped = ident(procName)
   result = (
     case httpMethod
     of "HttpGet":
       quote do: register(HttpGet,    (RouteRegister(path: `path`, delegate: collect(`class`, `procNameStriped`))))
-    of "HttpPost":   
+    of "HttpPost":
       quote do: register(HttpPost,   (RouteRegister(path: `path`, delegate: collect(`class`, `procNameStriped`))))
-    of "HttpPut":    
+    of "HttpPut":
       quote do: register(HttpPut,    (RouteRegister(path: `path`, delegate: collect(`class`, `procNameStriped`))))
-    of "HttpDelete": 
+    of "HttpDelete":
       quote do: register(HttpDelete, (RouteRegister(path: `path`, delegate: collect(`class`, `procNameStriped`))))
     else: newEmptyNode()
   )
@@ -67,8 +59,8 @@ proc registerRoute(httpMethod: string, path: string, class: NimNode, procName: s
 # Định nghĩa Controller
 macro Controller*(classT, body: untyped): untyped =
   result          = newStmtList()
-  let class       = if classT.kind == nnkCall: ident($classT[0]) else: ident($classT)
-  let routePrefix = if classT.kind == nnkCall: $classT[1]        else: ""
+  let class       = if classT.kind == nnkCall:  classT[0] else: classT
+  let routePrefix = if classT.kind == nnkCall: $classT[1] else: ""
   let classDef = quote do:
     type `class`* = ref object of BaseController
   result.add quote("@") do: @classDef
@@ -78,19 +70,18 @@ macro Controller*(classT, body: untyped): untyped =
   let metaProcSecion        = newStmtList()
   # Định nghĩa các meta proc
   metaProcSecion.add quote do:
-    proc inject[T: BaseSingleton](t: typedesc[T]): T {.gcsafe.} = cast[T](singletonRegistry[$t])
+    proc inject[T: SingletonObj](t: typedesc[T]): T {.gcsafe.} = cast[T](singletonRegistry[$t])
   # Khởi tạo controller instance, đăng ký vào controllerRegistry
   let analyzeBody: NimNode = quote do:
     let inst = new `classIdent`
     controllerRegistry[`classNameStr`] = cast[BaseController](inst)  
   var pendingAttrs: seq[NimNode] = @[]
-  const httpMethodsAttr = @["HttpGet", "HttpPost", "HttpPut", "HttpDelete"]
-  const useGuardAttr    = @["UseGuard"]
   for stmt in body:
     if stmt.kind == nnkBracket:
       let attr = if stmt[0].kind == nnkCall: stmt[0][0] else: stmt[0]
-      if ($attr notin httpMethodsAttr) and ($attr notin useGuardAttr):
-        error "[ERROR] Attribute " & $attr & " invalid, " & (httpMethodsAttr & useGuardAttr).join(", ")
+      # Kiểm tra các attribute có hợp lệ hay không
+      if ($attr notin ROUTE_METHOD_ATTRIBUTE) and ($attr notin USE_GUARD_ATTRIBUTE):
+        error "[ERROR] Attribute " & $attr & " invalid, " & (ROUTE_METHOD_ATTRIBUTE & USE_GUARD_ATTRIBUTE).join(", ")
       pendingAttrs.add(stmt)
     elif stmt.kind == nnkProcDef:
       let procName         = stmt[0]  # Tên hàm
@@ -145,30 +136,29 @@ macro Controller*(classT, body: untyped): untyped =
           procBodyNew   # Thân hàm
         )
         outBody.add(newProc)
-      else:
-        outBody.add(stmt)
+      else: outBody.add(stmt)
       if pendingAttrs.len > 0:
         let procNameStr = ($procName).strip(chars = {'*'})
+        # Kiểm tra các attributes
         for attr in pendingAttrs:
           if attr[0].kind == nnkCall:
             let identKey = attr[0][0]
             let identVal = attr[0][1]
-            if $identKey in httpMethodsAttr:
+            if $identKey in ROUTE_METHOD_ATTRIBUTE:
               let rawPath      = if identVal.kind == nnkStrLit: $identVal else: "/"
               let splatOrEmpty = if routePrefix.endsWith("/") or rawPath.startsWith("/"): "" else: "/"
               let path         = routePrefix & splatOrEmpty & rawPath
-              let roStmt = registerRoute($identKey, path, class, procNameStr)
-              outbody.add(roStmt)
-            elif $identKey in useGuardAttr:
+              outbody.add(registerRoute($identKey, path, class, procNameStr))
+            elif $identKey in USE_GUARD_ATTRIBUTE:
               if identVal.kind == nnkIdent:
                 analyzeBody.add quote do:
-                  registerGuard(`classNameStr`, `procNameStr`, `identVal`)
+                  let guardInst = inject(`identVal`)
+                  controllerRegistry[`classNameStr`].addGuard(`procNameStr`, guardInst)
           elif attr[0].kind == nnkIdent:
             let identKey = attr[0]
-            if $identKey in httpMethodsAttr:
-              let roStmt = registerRoute($identKey, routePrefix, class, procNameStr)
-              outBody.add(roStmt)
-        pendingAttrs.setLen(0)  
+            if $identKey in ROUTE_METHOD_ATTRIBUTE:
+              outBody.add(registerRoute($identKey, routePrefix, class, procNameStr))
+        pendingAttrs.setLen(0)
   
   result.add(metaProcSecion)  # Cài đặt các hàm bổ trợ cần thiết
   result.add(analyzeBody)     # Cài đặt init controller và đăng ký các guard

@@ -23,9 +23,12 @@ type NimHttpApplication* = ref object of RootObj
   settings*: NimHttpApplicationSettings
 
 proc start*(this: NimHttpApplication) =
-  info """_  _ _ _  _ ____ ____ _  _"""
-  info """|\ | | |\/| |__| [__  |__|"""
-  info """| \| | |  | |  | ___] |  |"""
+  info """███╗   ██╗██╗███╗   ███╗ █████╗ ███████╗██╗  ██╗"""
+  info """████╗  ██║██║████╗ ████║██╔══██╗██╔════╝██║  ██║"""
+  info """██╔██╗ ██║██║██╔████╔██║███████║███████╗███████║"""
+  info """██║╚██╗██║██║██║╚██╔╝██║██╔══██║╚════██║██╔══██║"""
+  info """██║ ╚████║██║██║ ╚═╝ ██║██║  ██║███████║██║  ██║"""
+  info """╚═╝  ╚═══╝╚═╝╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝"""
   info "Starting server"
   info "Application is running on " & this.settings.getHostUrl
   waitFor newAsyncHttpServer().serve(

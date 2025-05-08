@@ -1,6 +1,4 @@
 import ../../../nim_http/core/di
 
-type UserService* = ref object of BaseSingleton
+singleton UserService:
   name*: string = "hieuht"
-
-Injectable(UserService)

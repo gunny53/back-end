@@ -10,10 +10,26 @@ type BaseController* = ref object of RootObj
   response: Response                     = Response()                      # Response object
 
 # Hàm gắn request vào controller
-proc processRequest*(this: BaseController, req: Request): BaseController =
+func processRequest*(this: BaseController, req: Request): BaseController =
   this.request          = req
   this.response.request = req
   return this
+
+# Hàm xử lý nghiệp vụ của controller khi đã vượt qua các tầng xác thực (guards)
+proc invoke*(this: BaseController, handler: auto): Future[void] =
+  let fn = proc (this: BaseController): Future[void] {.closure, async.} = handler(this)
+  return fn(this)
+
+# Hàm gắn guard vào proc handler
+func addGuard*[T: Guard](this: BaseController, key: string, guard: T) =
+  if not this.guards.hasKey(key):
+    this.guards[key] = @[]
+  this.guards[key].add(cast[Guard](guard))  
+
+func getGuards*(this: BaseController, key: string): seq[Guard] =
+  if not this.guards.hasKey(key):
+    this.guards[key] = @[]
+  return this.guards[key]
 
 # Các template tương ứng với các status code thông dụng
 template Http200*(content): untyped = this.response.send(Http200, content)
@@ -22,11 +38,6 @@ template Http204*():        untyped = this.request.respond(Http204)
 template Http201*(content): untyped = this.response.send(Http201, content)
 template Http403*(content): untyped = this.response.send(Http403, content)
 template Http404*(content): untyped = this.response.send(Http404, content)
-
-# Hàm xử lý nghiệp vụ của controller khi đã vượt qua các tầng xác thực (guards)
-proc invoke*(this: BaseController, handler: auto): Future[void] =
-  let fn = proc (this: BaseController): Future[void] {.closure, async.} = handler(this)
-  return fn(this)
 
 # Bảng lưu các inst controller theo tên
 let controllerRegistry*: TableRef[string, BaseController] = newTable[string, BaseController]()
