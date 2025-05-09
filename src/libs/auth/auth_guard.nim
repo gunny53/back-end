@@ -1,7 +1,8 @@
 import asynchttpserver
 import ../../nim_http/core/[guard, exception, di]
 
-singleton AuthGuard of Guard:
+class AuthGuard*() of Guard:
+
   method canActivate(self: AuthGuard, req: Request): bool =
     if (req.headers.hasKey("Authorization")):
       let token = req.headers["Authorization"]

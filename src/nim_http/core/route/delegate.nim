@@ -7,7 +7,7 @@ type ControllerDelegate* = ref object
 
 # Lưu thông tin function handler cho request, bao gồm controller instance, guards, handler function
 macro collect*[T: BaseController](ctlClass: typedesc[T], handler: untyped): ControllerDelegate =
-  let className  = $ctlClass 
+  let className  = $ctlClass
   let methodName = $handler
   result         = quote do:
     # Ép kiểu về kiểu gốc

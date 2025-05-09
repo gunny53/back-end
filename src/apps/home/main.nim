@@ -31,6 +31,6 @@ Controller Home("api/v1"):
 
   [HttpGet]
   proc html() =
-    let userService = inject(UserService)
-    echo userService.name()
+    # let userService = inject(UserService)
+    # echo userService.name()
     Http200 "<html>hello mf</html>"
