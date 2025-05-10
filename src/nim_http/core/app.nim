@@ -34,7 +34,7 @@ proc start*(this: NimHttpApplication) =
   waitFor newAsyncHttpServer().serve(
     port     = Port(this.settings.port),
     address  = this.settings.host,
-    callback = proc (request: Request) {.async, gcsafe.} =
+    callback = proc (request: Request) {.async.} =
     debug "Incoming request -> route path " & request.url.path
     try:
       await request.process

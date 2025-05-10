@@ -3,7 +3,7 @@ import asyncdispatch, asynchttpserver, json
 
 type HttpErrorHandle* = ref object of NimHttpApplicationErrorHandle
 
-method catch*(e: HttpErrorHandle, req: Request): Future[void] {.async, gcsafe.} =
+method catch*(e: HttpErrorHandle, req: Request): Future[void] {.async.} =
   if not req.headers.hasKey("Content-Type"):
     req.headers["Content-Type"] = "application/json"
   let mess = %*{"statusCode": e.exception.statusCode.int, "message": e.exception.message}

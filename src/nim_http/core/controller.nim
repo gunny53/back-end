@@ -11,6 +11,9 @@ const USE_GUARD_ATTRIBUTE    = @["UseGuard"]
 type ParamPragma = enum
   body, query, param
 
+type RouteMethodAttribute2* = enum
+  HttpGet = "HttpGet"
+
 # Hàm parse bind param
 func parseParamStmt(identName: NimNode, identNameStr: string, identType: NimNode): NimNode =
   let identTypeStr = $identType
@@ -41,18 +44,17 @@ func parseBodyStmt(identName: NimNode, identNameStr: string, identType: NimNode)
   result = quote do:
     let `identName`: `identType` = try: to(parseJson(this.request.body), `identType`) except Exception as e: raise BAD_REQUEST(e.msg)
 
-func registerRoute(httpMethod: string, path: string, class: NimNode, procName: string): NimNode =
-  let procNameStriped = ident(procName)
+proc registerRoute(httpMethod: string, path: string, class: NimNode, procIdent: NimNode): NimNode =
   result = (
     case httpMethod
     of "HttpGet":
-      quote do: register(HttpGet,    (RouteRegister(path: `path`, delegate: collect(`class`, `procNameStriped`))))
+      quote do: register(HttpGet,    (RouteRegister(path: `path`, delegate: collect(`class`, `procIdent`))))
     of "HttpPost":
-      quote do: register(HttpPost,   (RouteRegister(path: `path`, delegate: collect(`class`, `procNameStriped`))))
+      quote do: register(HttpPost,   (RouteRegister(path: `path`, delegate: collect(`class`, `procIdent`))))
     of "HttpPut":
-      quote do: register(HttpPut,    (RouteRegister(path: `path`, delegate: collect(`class`, `procNameStriped`))))
+      quote do: register(HttpPut,    (RouteRegister(path: `path`, delegate: collect(`class`, `procIdent`))))
     of "HttpDelete":
-      quote do: register(HttpDelete, (RouteRegister(path: `path`, delegate: collect(`class`, `procNameStriped`))))
+      quote do: register(HttpDelete, (RouteRegister(path: `path`, delegate: collect(`class`, `procIdent`))))
     else: newEmptyNode()
   )
 
@@ -68,6 +70,7 @@ macro Controller*(classT, body: untyped): untyped =
   let classIdent:   NimNode = ident($class)
   let classNameStr: string  = $class
   let metaProcSecion        = newStmtList()
+  var newProc               = newEmptyNode()
   # Định nghĩa các meta proc
   metaProcSecion.add quote do:
     proc inject[T: SingletonObj](t: typedesc[T]): T {.gcsafe.} = cast[T](singletonRegistry[$t])
@@ -76,7 +79,10 @@ macro Controller*(classT, body: untyped): untyped =
     let inst = new `classIdent`
     controllerRegistry[`classNameStr`] = cast[BaseController](inst)  
   var pendingAttrs: seq[NimNode] = @[]
+  let injectStmtSeq = newStmtList()
   for stmt in body:
+    if stmt.kind == nnkLetSection:
+      injectStmtSeq.add stmt
     if stmt.kind == nnkBracket:
       let attr = if stmt[0].kind == nnkCall: stmt[0][0] else: stmt[0]
       # Kiểm tra các attribute có hợp lệ hay không
@@ -88,8 +94,8 @@ macro Controller*(classT, body: untyped): untyped =
       let generic          = stmt[1]  # Generic params (nếu có)
       let patterns         = stmt[2]  # Pattern params (rarely used)
       let params           = stmt[3]  # Đã patch "this"
-      let pragmas          = stmt[4]  # Giữ pragmas gốc
-      let annotations      = stmt[5]  # Annotations
+      var pragmas          = stmt[4]  # Giữ pragmas gốc
+      var annotations      = stmt[5]  # Annotations
       let procBodyOriginal = stmt[6]  # Thân hàm
       let thisDefined      = anyIt(params[1..^1], it[1].kind != nnkEmpty and $it[1] == $BaseController)
       let procBodyNew      = newStmtList()
@@ -123,10 +129,16 @@ macro Controller*(classT, body: untyped): untyped =
                   else: newEmptyNode()
               else:
                 newParams.add(newIdentDefs(ident($param[0]), ident($param[1]), newLit(0)))
+        for index, injectStmt in injectStmtSeq.pairs():
+          procBodyOriginal.insert(index, injectStmt)
         procBodyNew.add(procBodyOriginal)
         for i in 2..<params[0].len:
           newParams.add(params[0][i])
-        let newProc: NimNode = nnkProcDef.newTree(
+        if pragmas.kind != nnkPragma:
+          pragmas = nnkPragma.newTree()
+        pragmas.add(ident("gcsafe"))
+        pragmas.add(ident("async"))
+        newProc = nnkProcDef.newTree(
           procName,     # Tên hàm
           generic,      # Generic params (nếu có)
           patterns,     # Pattern params (rarely used)
@@ -148,7 +160,7 @@ macro Controller*(classT, body: untyped): untyped =
               let rawPath      = if identVal.kind == nnkStrLit: $identVal else: "/"
               let splatOrEmpty = if routePrefix.endsWith("/") or rawPath.startsWith("/"): "" else: "/"
               let path         = routePrefix & splatOrEmpty & rawPath
-              outbody.add(registerRoute($identKey, path, class, procNameStr))
+              outbody.add(registerRoute($identKey, path, class, procName))
             elif $identKey in USE_GUARD_ATTRIBUTE:
               if identVal.kind == nnkIdent:
                 analyzeBody.add quote do:
@@ -157,7 +169,7 @@ macro Controller*(classT, body: untyped): untyped =
           elif attr[0].kind == nnkIdent:
             let identKey = attr[0]
             if $identKey in ROUTE_METHOD_ATTRIBUTE:
-              outBody.add(registerRoute($identKey, routePrefix, class, procNameStr))
+              outBody.add(registerRoute($identKey, routePrefix, class, procName))
         pendingAttrs.setLen(0)
   
   result.add(metaProcSecion)  # Cài đặt các hàm bổ trợ cần thiết

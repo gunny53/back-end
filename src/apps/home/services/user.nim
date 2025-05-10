@@ -1,3 +1,3 @@
-import ../../../nim_http/core/di
+import ../../../nim_http/core/di, log
 
-class UserService*(*name: string) of SingletonObj
+class UserService*(*name: string, *log: LogService) of SingletonObj

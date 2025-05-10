@@ -52,15 +52,16 @@ macro class*(declareClass: untyped): untyped =
   result        = newStmtList()
   let rawClass  = declareClass[1]
   let baseClass = declareClass[2]
+  echo treeRepr declareClass
   if rawClass.kind == nnkInfix:
     let isExported: bool    = rawClass[0].eqIdent("*")
     let classIdent: NimNode = if isExported: rawClass[1] else: rawClass[0]
     let classDef            = (
       if isExported:
         quote do:
-          type `classIdent`* = ref object of `baseClass` # TODO
+          type `classIdent`* = ref object of `baseClass`
       else:  quote do: 
-        type `classIdent` = ref object of `baseClass` # TODO
+        type `classIdent` = ref object of `baseClass`
     )
     let classFields        = if isExported: rawClass[2] else: rawClass[1]
     for fieldStmt in classFields:
