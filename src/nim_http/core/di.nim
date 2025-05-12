@@ -6,6 +6,8 @@ type SingletonObj* = ref object of RootObj
 var singletonRegistry* {.threadvar.}: TableRef[string, SingletonObj]
 singletonRegistry = newTable[string, SingletonObj]()
 
+proc inject*[T: SingletonObj](t: typedesc[T]): T {.gcsafe.} = cast[T](singletonRegistry[$t])
+
 macro class*(declareClass: untyped, body: untyped): untyped =
   result        = newStmtList()
   let rawClass  = declareClass[1]

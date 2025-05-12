@@ -1,7 +1,9 @@
-import macros, asyncdispatch, asynchttpserver, macrocache, tables, sequtils, di, strutils, utils, uri, json, options
+import macros, asyncdispatch, asynchttpserver, macrocache, tables, sequtils, strutils, utils, uri, json, options
 import re, exception, route
 import controller/base as base
+from di import inject
 export base
+export inject
 
 # Constants
 const ROUTE_METHOD_ATTRIBUTE = @["HttpGet", "HttpPost", "HttpPut", "HttpDelete"]
@@ -69,11 +71,6 @@ macro Controller*(classT, body: untyped): untyped =
   let outBody:      NimNode = newStmtList()
   let classIdent:   NimNode = ident($class)
   let classNameStr: string  = $class
-  let metaProcSecion        = newStmtList()
-  var newProc               = newEmptyNode()
-  # Định nghĩa các meta proc
-  metaProcSecion.add quote do:
-    proc inject[T: SingletonObj](t: typedesc[T]): T {.gcsafe.} = cast[T](singletonRegistry[$t])
   # Khởi tạo controller instance, đăng ký vào controllerRegistry
   let analyzeBody: NimNode = quote do:
     let inst = new `classIdent`
@@ -138,7 +135,7 @@ macro Controller*(classT, body: untyped): untyped =
           pragmas = nnkPragma.newTree()
         pragmas.add(ident("gcsafe"))
         pragmas.add(ident("async"))
-        newProc = nnkProcDef.newTree(
+        let newProc = nnkProcDef.newTree(
           procName,     # Tên hàm
           generic,      # Generic params (nếu có)
           patterns,     # Pattern params (rarely used)
@@ -171,10 +168,8 @@ macro Controller*(classT, body: untyped): untyped =
             if $identKey in ROUTE_METHOD_ATTRIBUTE:
               outBody.add(registerRoute($identKey, routePrefix, class, procName))
         pendingAttrs.setLen(0)
-  
-  result.add(metaProcSecion)  # Cài đặt các hàm bổ trợ cần thiết
-  result.add(analyzeBody)     # Cài đặt init controller và đăng ký các guard
-  result.add(outBody)         # Cài đặt thân hàm đã chèn các tham số cần thiết và đăng ký các route
+  result.add(analyzeBody)  # Cài đặt init controller và đăng ký các guard
+  result.add(outBody)      # Cài đặt thân hàm đã chèn các tham số cần thiết và đăng ký các route
 
 # Param pragma
 template `$ParamPragma.param`*  (key: string = "") {.pragma.}
