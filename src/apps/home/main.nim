@@ -9,11 +9,11 @@ Controller Home("api/v1"):
   let userService   = inject(UserService)
   let loggerService = inject(LogService)
 
-  [HttpGet("index")]
+  [GET("index")]
   [UseGuard(AuthGuard)]
   proc index() = Http200 "Hello from HomeController! " 
 
-  [HttpPost("users/:id")]
+  [GET("users/:id")]
   [UseGuard(AuthGuard)]
   proc users(
     id   {.param.}: int,
@@ -22,7 +22,7 @@ Controller Home("api/v1"):
   ) = 
     Http200 user
 
-  [HttpGet("account/:id")]
+  [GET("account/:id")]
   proc accounts(
     id   {.param.}: int,
     name {.query.}: string
@@ -31,7 +31,7 @@ Controller Home("api/v1"):
       Http400 "erro"
     Http200 "Hello from accounts! " & $id & ", name = " & name
 
-  [HttpGet]
+  [GET]
   proc html() =
     echo userService.name
     echo loggerService.mgs

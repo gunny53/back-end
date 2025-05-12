@@ -6,15 +6,12 @@ export base
 export inject
 
 # Constants
-const ROUTE_METHOD_ATTRIBUTE = @["HttpGet", "HttpPost", "HttpPut", "HttpDelete"]
+const ROUTE_METHOD_ATTRIBUTE = @[$HttpGet, $HttpPost, $HttpPut, $HttpDelete]
 const USE_GUARD_ATTRIBUTE    = @["UseGuard"]
 
 # Định nghĩa các pragma cho param (các loại tham số trong controller)
 type ParamPragma = enum
   body, query, param
-
-type RouteMethodAttribute2* = enum
-  HttpGet = "HttpGet"
 
 # Hàm parse bind param
 func parseParamStmt(identName: NimNode, identNameStr: string, identType: NimNode): NimNode =
@@ -45,20 +42,6 @@ func parseQueryStmt(identName: NimNode, identNameStr: string, identType: NimNode
 func parseBodyStmt(identName: NimNode, identNameStr: string, identType: NimNode): NimNode =
   result = quote do:
     let `identName`: `identType` = try: to(parseJson(this.request.body), `identType`) except Exception as e: raise BAD_REQUEST(e.msg)
-
-proc registerRoute(httpMethod: string, path: string, class: NimNode, procIdent: NimNode): NimNode =
-  result = (
-    case httpMethod
-    of "HttpGet":
-      quote do: register(HttpGet,    (RouteRegister(path: `path`, delegate: collect(`class`, `procIdent`))))
-    of "HttpPost":
-      quote do: register(HttpPost,   (RouteRegister(path: `path`, delegate: collect(`class`, `procIdent`))))
-    of "HttpPut":
-      quote do: register(HttpPut,    (RouteRegister(path: `path`, delegate: collect(`class`, `procIdent`))))
-    of "HttpDelete":
-      quote do: register(HttpDelete, (RouteRegister(path: `path`, delegate: collect(`class`, `procIdent`))))
-    else: newEmptyNode()
-  )
 
 # Định nghĩa Controller
 macro Controller*(classT, body: untyped): untyped =
@@ -157,7 +140,10 @@ macro Controller*(classT, body: untyped): untyped =
               let rawPath      = if identVal.kind == nnkStrLit: $identVal else: "/"
               let splatOrEmpty = if routePrefix.endsWith("/") or rawPath.startsWith("/"): "" else: "/"
               let path         = routePrefix & splatOrEmpty & rawPath
-              outbody.add(registerRoute($identKey, path, class, procName))
+              let httpMethod   = $identKey
+              outbody.add(
+                quote do: RouteRegister(path: `path`, delegate: collect(`class`, `procName`)).reg(`httpMethod`)
+              )
             elif $identKey in USE_GUARD_ATTRIBUTE:
               if identVal.kind == nnkIdent:
                 analyzeBody.add quote do:
@@ -166,7 +152,10 @@ macro Controller*(classT, body: untyped): untyped =
           elif attr[0].kind == nnkIdent:
             let identKey = attr[0]
             if $identKey in ROUTE_METHOD_ATTRIBUTE:
-              outBody.add(registerRoute($identKey, routePrefix, class, procName))
+              let httpMethod  = $identKey
+              outBody.add(
+                quote do: RouteRegister(path: `routePrefix`, delegate: collect(`class`, `procName`)).reg(`httpMethod`)
+              )
         pendingAttrs.setLen(0)
   result.add(analyzeBody)  # Cài đặt init controller và đăng ký các guard
   result.add(outBody)      # Cài đặt thân hàm đã chèn các tham số cần thiết và đăng ký các route

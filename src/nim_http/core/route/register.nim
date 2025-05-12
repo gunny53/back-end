@@ -1,4 +1,4 @@
-import delegate, asynchttpserver, detail, pattern, tables
+import delegate, asynchttpserver, detail, pattern, tables, strutils
 
 # Lưu thông tin của 1 route
 type RouteRegister* = ref object
@@ -6,10 +6,10 @@ type RouteRegister* = ref object
   delegate*: ControllerDelegate # Delegate cho route (controller + handler)
 
 # Đăng ký route
-proc register*(httpMethod: HttpMethod, route: RouteRegister) =
-  let (pattern, key) = parseRoutePattern(route.path)
+proc reg*(this: RouteRegister, httpMed: auto) =
+  let (pattern, key) = parseRoutePattern(this.path)
   routeTree[key]     = RouteDetail(
-    httpMethod: httpMethod,
+    httpMethod: parseEnum[HttpMethod]($httpMed),
     pattern:    pattern,
-    delegate:   route.delegate
+    delegate:   this.delegate
   )
