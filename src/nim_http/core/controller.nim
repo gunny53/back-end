@@ -6,7 +6,7 @@ export base
 export inject
 
 # Constants
-const ROUTE_METHOD_ATTRIBUTE = @[$HttpGet, $HttpPost, $HttpPut, $HttpDelete]
+const ROUTE_METHOD_ATTRIBUTE = HttpMethod.toSeq().mapIt($(it))
 const USE_GUARD_ATTRIBUTE    = @["UseGuard"]
 
 # Định nghĩa các pragma cho param (các loại tham số trong controller)

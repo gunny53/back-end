@@ -54,7 +54,6 @@ macro class*(declareClass: untyped): untyped =
   result        = newStmtList()
   let rawClass  = declareClass[1]
   let baseClass = declareClass[2]
-  echo treeRepr declareClass
   if rawClass.kind == nnkInfix:
     let isExported: bool    = rawClass[0].eqIdent("*")
     let classIdent: NimNode = if isExported: rawClass[1] else: rawClass[0]
