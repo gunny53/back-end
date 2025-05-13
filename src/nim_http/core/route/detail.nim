@@ -28,4 +28,4 @@ proc process*(request: Request): Future[void] {.async, gcsafe.} =
             route.delegate.instance.params[name] = matches[i]
           await route.resolve(request)
       else: raise METHOD_NOT_ALLOWED()
-  raise NOT_FOUND()  
+  raise NOT_FOUND()
