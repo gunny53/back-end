@@ -43,15 +43,14 @@ func parseBodyStmt(identName: NimNode, identNameStr: string, identType: NimNode)
   result = quote do:
     let `identName`: `identType` = try: to(parseJson(this.request.body), `identType`) except Exception as e: raise BAD_REQUEST(e.msg)
 
-proc detectMethodAtrribute(stmt: NimNode): seq[NimNode] =
-  var pendingAttrs: seq[NimNode] = @[]
+# Hàm phát hiện method Attribute
+proc detectMethodAtrribute(pendingAttrs: var seq[NimNode], stmt: NimNode) =
   if stmt.kind == nnkBracket:
     let attr = if stmt[0].kind == nnkCall: stmt[0][0] else: stmt[0]
     # Kiểm tra các attribute có hợp lệ hay không
     if ($attr notin ROUTE_METHOD_ATTRIBUTE) and ($attr notin USE_GUARD_ATTRIBUTE):
       error "[ERROR] Attribute " & $attr & " invalid, " & (ROUTE_METHOD_ATTRIBUTE & USE_GUARD_ATTRIBUTE).join(", ")
     pendingAttrs.add(stmt)
-  pendingAttrs
 
 # Định nghĩa Controller
 macro Controller*(classT, body: untyped): untyped =
@@ -74,7 +73,7 @@ macro Controller*(classT, body: untyped): untyped =
     if stmt.kind == nnkLetSection:
       injectStmtSeq.add stmt
     if stmt.kind == nnkBracket:
-      pendingAttrs = detectMethodAtrribute(stmt)
+      detectMethodAtrribute(pendingAttrs, stmt)
     elif stmt.kind == nnkProcDef:
       let procName         = stmt[0]  # Tên hàm
       let generic          = stmt[1]  # Generic params (nếu có)
@@ -150,7 +149,7 @@ macro Controller*(classT, body: untyped): untyped =
               outbody.add(
                 quote do: RouteRegister(path: `path`, delegate: collect(`class`, `procName`)).reg(`httpMethod`)
               )
-            elif $identKey in USE_GUARD_ATTRIBUTE:
+            if $identKey in USE_GUARD_ATTRIBUTE:
               if identVal.kind == nnkIdent:
                 analyzeBody.add quote do:
                   let guardInst = inject(`identVal`)

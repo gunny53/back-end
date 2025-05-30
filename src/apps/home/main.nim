@@ -1,13 +1,11 @@
 import ../../nim_http/core/controller
 import ../../libs/auth/auth_guard
-import ./services/[user, log], asyncdispatch
+import asyncdispatch
 
 type UserDto = ref object
   username: string  
 
 Controller Home("api/v1"):
-  let userService   = inject(UserService)
-  let loggerService = inject(LogService)
 
   [GET("index")]
   [UseGuard(AuthGuard)]
@@ -33,6 +31,4 @@ Controller Home("api/v1"):
 
   [GET]
   proc html() =
-    echo userService.name
-    echo loggerService.mgs
     Http200 "<html>hello mf</html>"
