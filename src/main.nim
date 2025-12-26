@@ -52,4 +52,20 @@ if config.getBool("CACHE_ENABLED", false):
 # Start application
 echo "Starting ", config.get("APP_NAME", "NimHTTP Framework")
 echo "Environment: ", config.get("APP_ENV", "production")
-NimHttpApplication(settings: settings).start()
+
+# Create application instance with proper lifecycle management
+let app = NimHttpApplication(settings: settings)
+
+# Register signal handlers for graceful shutdown (Unix-like systems)
+when defined(posix):
+  import posix
+  
+  proc handleShutdown() {.noconv.} =
+    echo "\nReceived shutdown signal, stopping server..."
+    app.stop()
+    quit(0)
+  
+  setControlCHook(handleShutdown)
+
+# Start the application
+app.start()

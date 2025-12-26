@@ -25,6 +25,7 @@ func getHostUrl(this: NimHttpApplicationSettings): string = "http://" & this.hos
 
 type NimHttpApplication* = ref object of RootObj
   settings*: NimHttpApplicationSettings
+  server*: AsyncHttpServer  # Store server instance for lifecycle management
 
 proc processRequestWithMiddleware(
   app: NimHttpApplication,
@@ -85,10 +86,20 @@ proc start*(this: NimHttpApplication) =
   if this.settings.middleware.isNil:
     this.settings.middleware = getMiddlewareConsumer()
   
-  waitFor newAsyncHttpServer().serve(
+  # Create and store server instance for lifecycle management
+  this.server = newAsyncHttpServer()
+  
+  waitFor this.server.serve(
     port     = Port(this.settings.port),
     address  = this.settings.host,
     callback = proc (request: Request) {.async.} =
       debug "Incoming request -> " & request.reqMethod & " " & request.url.path
       await this.processRequestWithMiddleware(request)
   )
+
+proc stop*(this: NimHttpApplication) =
+  ## Gracefully stops the server
+  if not this.server.isNil:
+    info "Shutting down server..."
+    this.server.close()
+    info "Server stopped"

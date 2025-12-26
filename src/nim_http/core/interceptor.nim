@@ -28,7 +28,11 @@ method intercept*(
 
 # Legacy method for backward compatibility
 method intercept*(this: Interceptor, ctx: Request, next: proc(): Future[Response]): Future[Response] {.base, gcsafe.} = 
-  discard
+  ## Legacy interceptor method for backward compatibility
+  ## This method should be overridden in subclasses
+  ## Returns an empty response to maintain API compatibility
+  let emptyResponse = Response(statusCode: Http200, body: "")
+  return newFuture[Response]("legacy_intercept")
 
 # Built-in Interceptors
 
@@ -187,6 +191,9 @@ proc applyInterceptors*(
   var currentHandler = CallHandler(handle: handler)
   
   # Apply interceptors in reverse order to create proper chain
+  # Reverse order ensures the first registered interceptor wraps all others,
+  # creating a nested call structure where each interceptor can execute
+  # before and after the next one in the chain
   for i in countdown(globalInterceptors.interceptors.len - 1, 0):
     let interceptor = globalInterceptors.interceptors[i]
     let nextHandler = currentHandler
