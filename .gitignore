@@ -16,6 +16,8 @@ nimcache/
 *.a
 *.o
 *.obj
+nim_http
+main
 
 # VSCode / Editor files
 .vscode/
@@ -29,6 +31,7 @@ Thumbs.db
 
 # Log files
 *.log
+logs/
 
 # Nim doc/output
 doc/
@@ -38,3 +41,27 @@ htmldocs/
 *.bak
 *.tmp
 *.test
+
+# Environment and configuration
+.env
+.env.local
+.env.*.local
+config/local.json
+secrets/
+
+# Dependencies
+node_modules/
+vendor/
+
+# Test coverage
+coverage/
+*.coverage
+
+# Docker volumes
+.docker/volumes/
+
+# IDE specific
+*.iml
+.project
+.classpath
+.settings/
