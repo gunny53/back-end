@@ -1,31 +1,58 @@
-import asynchttpserver, pattern, delegate, asyncdispatch, tables, ../controller/base, ../guard, re, ../exception
+import asynchttpserver, pattern, delegate, asyncdispatch, tables, ../controller/base, ../guard, ../exception, strutils
 
-# Lưu thông tin chi tiết của 1 route
 type RouteDetail* = ref object
   httpMethod*: HttpMethod            # Phương thức HTTP (GET, POST, etc.)
   pattern*:    RoutePattern          # Pattern của route
-  delegate*:   ControllerDelegate # Hàm handler xử lý request cho route
+  delegate*:   ControllerDelegate    # Hàm handler xử lý request cho route
 
-# Lưu trữ các route trong bộ nhớ
-var routeTree* {.threadvar.}: TableRef[string, RouteDetail]
-routeTree = newTable[string, RouteDetail]()
+type RouteNode = ref object
+  children*:   TableRef[string, RouteNode]        # Các node con cho exact match segments
+  paramChild*: RouteNode                          # Node cho dynamic params (:id)
+  methods*:    TableRef[HttpMethod, RouteDetail]  # Routes cho từng HTTP method tại node này
 
-# Hàm xử lý request, kiểm tra các guards, middleware, interceptors trước khi thực thi nghiệp vụ ở controller
-proc resolve*(this: RouteDetail, request: Request): Future[void] =
+var routeRoot* {.threadvar.}: RouteNode
+routeRoot = RouteNode(children: newTable[string, RouteNode](), methods: newTable[HttpMethod, RouteDetail]())
+
+proc addRoute*(path: string, met: HttpMethod, delegate: ControllerDelegate) =
+  let pattern  = parseRoutePattern(path)
+  var current  = routeRoot
+  let segments = path.strip(chars = {'/'}).split("/")
+  for seg in segments:
+    if seg.startsWith(":"):
+      if current.paramChild.isNil:
+        current.paramChild = RouteNode(children: newTable[string, RouteNode](), methods: newTable[HttpMethod, RouteDetail]())
+      current = current.paramChild
+    else:
+      if not current.children.hasKey(seg):
+        current.children[seg] = RouteNode(children: newTable[string, RouteNode](), methods: newTable[HttpMethod, RouteDetail]())
+      current = current.children[seg]
+  current.methods[met] = RouteDetail(httpMethod: met, pattern: pattern, delegate: delegate)
+
+proc resolve*(this: RouteDetail, request: Request): Future[void] {.async, gcsafe.} =
   if this.delegate.guards.len > 0:
     for guard in this.delegate.guards:
-      discard guard.canActivate(request)
-  this.delegate.instance.processRequest(request).invoke(this.delegate.handler)
+      if not guard.canActivate(request):
+        raise FORBIDDEN("Guard failed")
+  await this.delegate.instance.processRequest(request).invoke(this.delegate.handler)
 
-# Hàm xử lý request tại tầng router
 proc process*(request: Request): Future[void] {.async, gcsafe.} =
-  for _, route in routeTree.pairs:
-    if match(request.url.path, route.pattern.regex):
-      if route.httpMethod == request.reqMethod:
-        var matches = newSeq[string](route.pattern.paramSegments.len + 1)
-        if match(request.url.path, route.pattern.regex, matches):
-          for i, name in route.pattern.paramSegments:
-            route.delegate.instance.params[name] = matches[i]
-          await route.resolve(request)
-      else: raise METHOD_NOT_ALLOWED()
-  raise NOT_FOUND()
+  let segments   = request.url.path.strip(chars = {'/'}).split("/")
+  var current    = routeRoot
+  var params     = newTable[string, string]()
+  var paramIndex = 0
+  for seg in segments:
+    if current.children.hasKey(seg):
+      current = current.children[seg]
+    elif not current.paramChild.isNil:
+      current = current.paramChild
+      if paramIndex < current.methods.getOrDefault(request.reqMethod).pattern.paramSegments.len:
+        params[current.methods[request.reqMethod].pattern.paramSegments[paramIndex]] = seg
+        paramIndex += 1
+    else:
+      raise NOT_FOUND("No route found for path: " & request.url.path)
+  if current.methods.hasKey(request.reqMethod):
+    let route = current.methods[request.reqMethod]
+    route.delegate.instance.params = params
+    await route.resolve(request)
+  else:
+    raise METHOD_NOT_ALLOWED("Method " & $request.reqMethod & " not allowed for path: " & request.url.path)

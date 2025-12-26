@@ -1,6 +1,7 @@
-import macros, asyncdispatch, asynchttpserver, macrocache, tables, sequtils, strutils, utils, uri, json, options
-import re, exception, route
+import macros, asynchttpserver, macrocache, tables, sequtils, strutils, json
+import route
 import controller/base as base
+import controller/binding
 from di import inject
 export base
 export inject
@@ -12,36 +13,6 @@ const USE_GUARD_ATTRIBUTE    = @["UseGuard"]
 # Định nghĩa các pragma cho param (các loại tham số trong controller)
 type ParamPragma = enum
   body, query, param
-
-# Hàm parse bind param
-func parseParamStmt(identName: NimNode, identNameStr: string, identType: NimNode): NimNode =
-  let identTypeStr = $identType
-  let body         = newStmtList()
-  case identTypeStr
-  of $int, $int32, $int64:
-    body.add quote do: parseInt(this.params[`identNameStr`])
-  of $float, $float32, $float64:
-    body.add quote do: parseFloat(this.params[`identNameStr`])
-  of $bool:
-    body.add quote do: parseBool(this.params[`identNameStr`])
-  else:
-    body.add quote do: this.params[`identNameStr`]
-  result = quote do:
-    let `identName` = try: `body` except Exception as e: raise BAD_REQUEST(e.msg)
-# Hàm parse query
-func parseQueryStmt(identName: NimNode, identNameStr: string, identType: NimNode, defaultVal: NimNode): NimNode =
-  result = quote do:
-    let `identName`: `identType` = this.request.url.query
-      .split("&")
-      .mapIt(it.split("=", maxsplit = 1))
-      .filterIt(it.len == 2 and it[0] == `identNameStr`)
-      .mapIt(decodeUrl(it[1]))
-      .headOption()
-      .flatMap(parseOrNone[`identType`]).getOrElse(`defaultVal`)
-# Hàm parse raw body to Dto class
-func parseBodyStmt(identName: NimNode, identNameStr: string, identType: NimNode): NimNode =
-  result = quote do:
-    let `identName`: `identType` = try: to(parseJson(this.request.body), `identType`) except Exception as e: raise BAD_REQUEST(e.msg)
 
 # Hàm phát hiện method Attribute
 proc detectMethodAtrribute(pendingAttrs: var seq[NimNode], stmt: NimNode) =
@@ -110,7 +81,7 @@ macro Controller*(classT, body: untyped): untyped =
                   procBodyNew.add case pragmaNodeStr:
                   of $ParamPragma.param: parseParamStmt(identName, identNameStr, identType)
                   of $ParamPragma.query: parseQueryStmt(identName, identNameStr, identType, defaultVal)
-                  of $ParamPragma.body:   parseBodyStmt(identName, identNameStr, identType)
+                  of $ParamPragma.body:  parseBodyStmt(identName,  identNameStr, identType)
                   else: newEmptyNode()
               else:
                 newParams.add(newIdentDefs(ident($param[0]), ident($param[1]), newLit(0)))
