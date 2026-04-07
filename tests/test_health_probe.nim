@@ -2,7 +2,7 @@ import unittest, strutils
 
 import nim_http/platform/health
 
-const TimestampSeparatorPositions = [4, 7, 10, 13, 16, 19]
+const TimestampSeparatorPositions = [4, 7, 10, 13, 16, 19] # -, -, T, :, :, Z in yyyy-MM-ddTHH:mm:ssZ
 
 proc isValidHealthProbeTimestamp(value: string): bool =
   if value.len != 20:

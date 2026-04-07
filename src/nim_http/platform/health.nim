@@ -26,6 +26,7 @@ var frozenReadinessChecks: seq[ReadinessCheck] = @[]
 var readinessChecksFrozen = false
 
 proc currentProbeTimestamp(): string =
+  ## Emit an ISO-like UTC timestamp using literal `T` and `Z` separators.
   now().utc.format("yyyy-MM-dd'T'HH:mm:ss'Z'")
 
 proc clearReadinessChecks*() =
@@ -71,6 +72,7 @@ proc readinessProbe*(service: string = "NimHTTP Framework"): HealthProbe =
   ## Builds the current readiness report from registered checks.
   ## When no explicit checks are registered, the probe returns a synthetic
   ## `startup=ready` check so orchestration endpoints still have a stable payload.
+  ## This fallback only means "no custom readiness checks were configured".
   var checks: seq[HealthCheckStatus] = @[]
   var isReady = true
 
