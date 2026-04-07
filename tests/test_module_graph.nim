@@ -29,6 +29,7 @@ suite "module graph":
   test "rejects exported providers that are not declared":
     let invalidModule = newModuleDescriptor(
       name = "InvalidModule",
+      # HiddenService is intentionally omitted from providers.
       exports = [HiddenService]
     )
 

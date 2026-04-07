@@ -10,6 +10,9 @@ type
     name*: string
 
   ModuleDescriptor* = ref object
+    ## Ref semantics let modules point at imported module descriptors directly,
+    ## including cyclic graphs used in validation tests. Callers should treat
+    ## registered descriptors as shared immutable graph nodes after wiring.
     name*: string
     imports*: seq[ModuleDescriptor]
     providers*: seq[ProviderToken]
@@ -146,6 +149,8 @@ proc collectRegisteredModule(
     raise newException(ValueError, "Unknown registered module " & descriptor.name)
 
   let registeredDescriptor = registry.descriptors[descriptor.name]
+  if registeredDescriptor != descriptor:
+    raise newException(ValueError, "Mismatched registered module descriptor for " & descriptor.name)
   state.modules[registeredDescriptor.name] = registeredDescriptor
   for importedModule in registeredDescriptor.imports:
     collectRegisteredModule(state, registry, importedModule)
