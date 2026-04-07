@@ -1,6 +1,7 @@
 import nim_http/kernel/application
 import nim_http/kernel/module
 import nim_http/platform/config
+import nim_http/platform/health
 import nim_http/pipeline/middleware
 import nim_http/pipeline/interceptor
 import libs/error/handle
@@ -20,6 +21,17 @@ let settings = NimHttpApplicationSettings()
 settings.host = config.get("SERVER_HOST", "127.0.0.1")
 settings.port = config.getInt("SERVER_PORT", 8888)
 settings.errorHandle = HttpErrorHandle()
+
+registerReadinessCheck("module_graph", proc(): bool {.gcsafe.} =
+  try:
+    discard validateGraph(moduleRegistry, ["ApplicationModule"])
+    true
+  except CatchableError:
+    false
+)
+registerReadinessCheck("configuration", proc(): bool {.gcsafe.} =
+  settings.host.len > 0 and settings.port > 0
+)
 
 # Setup middleware
 let middlewareConsumer = getMiddlewareConsumer()
