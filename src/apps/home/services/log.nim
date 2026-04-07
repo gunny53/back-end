@@ -1,3 +1,3 @@
-import ../../../nim_http/core/di
+import ../../../nim_http/kernel/di
 
 class LogService*(*mgs: string) of SingletonObj

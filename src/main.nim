@@ -1,7 +1,7 @@
-import nim_http/core/app
-import nim_http/core/config
-import nim_http/core/middleware
-import nim_http/core/interceptor
+import nim_http/kernel/application
+import nim_http/platform/config
+import nim_http/pipeline/middleware
+import nim_http/pipeline/interceptor
 import libs/error/handle
 import apps/home/main
 
