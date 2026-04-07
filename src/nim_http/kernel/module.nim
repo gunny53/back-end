@@ -50,7 +50,7 @@ converter toControllerToken*[T: BaseController](controller: typedesc[T]): Contro
 
 proc validate*(descriptor: ModuleDescriptor) =
   if descriptor.isNil:
-    raise newException(ValueError, "Module descriptor cannot be nil")
+    raise newException(ValueError, "Cannot validate nil module descriptor")
   if descriptor.name.len == 0:
     raise newException(ValueError, "Module name cannot be empty")
 
@@ -117,7 +117,7 @@ proc validateState(state: var ModuleGraphState): int =
   for _, descriptor in state.modules:
     for importedModule in descriptor.imports:
       if importedModule.isNil:
-        raise newException(ValueError, "Imported module cannot be nil in module " & descriptor.name)
+        raise newException(ValueError, "Module " & descriptor.name & " has a nil imported module reference")
       if importedModule.name.len == 0:
         raise newException(ValueError, "Imported module name cannot be empty in module " & descriptor.name)
       if importedModule.name == descriptor.name:
@@ -150,7 +150,10 @@ proc collectRegisteredModule(
 
   let registeredDescriptor = registry.descriptors[descriptor.name]
   if registeredDescriptor != descriptor:
-    raise newException(ValueError, "Mismatched registered module descriptor for " & descriptor.name)
+    raise newException(
+      ValueError,
+      "Module " & descriptor.name & " was registered with a different descriptor instance than the one passed for validation"
+    )
   state.modules[registeredDescriptor.name] = registeredDescriptor
   for importedModule in registeredDescriptor.imports:
     collectRegisteredModule(state, registry, importedModule)
