@@ -66,6 +66,9 @@ proc registerModule*(registry: var ModuleRegistry, descriptor: ModuleDescriptor)
   registry.descriptors[descriptor.name] = descriptor
 
 proc visitModule(state: var ModuleGraphState, moduleName: string) =
+  ## Performs a depth-first walk over the resolved module graph.
+  ## `active` tracks the current recursion stack for cycle detection, while
+  ## `visited` skips modules whose import subgraphs have already been validated.
   if moduleName in state.active:
     raise newException(ValueError, "Circular module dependency detected at " & moduleName)
   if moduleName in state.visited:
@@ -126,6 +129,7 @@ proc collectRegisteredModule(
     collectRegisteredModule(state, registry, importedModule)
 
 proc validateGraph*(descriptors: openArray[ModuleDescriptor]): int =
+  ## Validates the exact descriptor set passed by the caller and returns the count.
   var state = newModuleGraphState()
   for descriptor in descriptors:
     descriptor.validate()
@@ -135,6 +139,7 @@ proc validateGraph*(descriptors: openArray[ModuleDescriptor]): int =
   result = validateState(state)
 
 proc validateGraph*(registry: ModuleRegistry, rootModules: openArray[string]): int =
+  ## Validates the requested root modules and only the imports reachable from them.
   var state = newModuleGraphState()
   for rootModule in rootModules:
     collectRegisteredModule(state, registry, rootModule)

@@ -1,4 +1,5 @@
 import unittest
+import strutils
 
 import nim_http/kernel/module
 
@@ -39,5 +40,10 @@ suite "module graph":
       imports = ["FirstModule"]
     )
 
-    expect(ValueError):
-      validateGraph([first, second])
+    var errorMessage = ""
+    try:
+      discard validateGraph([first, second])
+    except ValueError as exc:
+      errorMessage = exc.msg
+
+    check errorMessage.contains("Circular module dependency detected")
