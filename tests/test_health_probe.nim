@@ -2,6 +2,22 @@ import unittest, strutils
 
 import nim_http/platform/health
 
+proc isIsoProbeTimestamp(value: string): bool =
+  if value.len != 20:
+    return false
+  if value[4] != '-' or value[7] != '-' or value[10] != 'T':
+    return false
+  if value[13] != ':' or value[16] != ':' or value[19] != 'Z':
+    return false
+
+  for index, ch in value:
+    if index in [4, 7, 10, 13, 16, 19]:
+      continue
+    if not ch.isDigit():
+      return false
+
+  true
+
 suite "health probes":
   setup:
     clearReadinessChecks()
@@ -13,7 +29,7 @@ suite "health probes":
     check probe.probe == "liveness"
     check probe.service == "TestService"
     check probe.checks.len == 0
-    check probe.timestamp.contains("T")
+    check isIsoProbeTimestamp(probe.timestamp)
 
   test "readiness probe aggregates registered checks":
     registerReadinessCheck("module_graph", proc(): bool {.gcsafe.} = true)
@@ -25,7 +41,7 @@ suite "health probes":
     check probe.probe == "readiness"
     check probe.service == "TestService"
     check probe.checks.len == 2
-    check probe.timestamp.contains("T")
+    check isIsoProbeTimestamp(probe.timestamp)
 
   test "duplicate readiness check names are updated in place":
     registerReadinessCheck("module_graph", proc(): bool {.gcsafe.} = false)

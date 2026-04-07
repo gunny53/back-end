@@ -1,4 +1,4 @@
-import times
+import tables, times
 
 type
   HealthCheckStatus* = ref object
@@ -16,13 +16,13 @@ type
     name: string
     check: proc(): bool {.gcsafe.}
 
-var readinessChecks: seq[ReadinessCheck] = @[]
+var readinessChecks = initTable[string, ReadinessCheck]()
 
 proc currentProbeTimestamp(): string =
   now().utc.format("yyyy-MM-dd'T'HH:mm:ss'Z'")
 
 proc clearReadinessChecks*() =
-  readinessChecks.setLen(0)
+  readinessChecks.clear()
 
 proc registerReadinessCheck*(
   name: string,
@@ -33,12 +33,7 @@ proc registerReadinessCheck*(
   if check.isNil:
     raise newException(ValueError, "Readiness check handler cannot be nil")
 
-  for index, readinessCheck in readinessChecks:
-    if readinessCheck.name == name:
-      readinessChecks[index] = ReadinessCheck(name: name, check: check)
-      return
-
-  readinessChecks.add(ReadinessCheck(name: name, check: check))
+  readinessChecks[name] = ReadinessCheck(name: name, check: check)
 
 proc livenessProbe*(service: string = "NimHTTP Framework"): HealthProbe =
   HealthProbe(
@@ -53,7 +48,7 @@ proc readinessProbe*(service: string = "NimHTTP Framework"): HealthProbe =
   var checks: seq[HealthCheckStatus] = @[]
   var isReady = true
 
-  for readinessCheck in readinessChecks:
+  for _, readinessCheck in readinessChecks:
     let passed =
       try:
         readinessCheck.check()
