@@ -154,7 +154,9 @@ proc collectRegisteredModule(
   if registeredDescriptor != descriptor:
     raise newException(
       ValueError,
-      "Module " & descriptor.name & " was registered with a different descriptor instance than the one passed for validation"
+      "Module descriptor mismatch for module '" & descriptor.name &
+      "'. The descriptor instance passed for validation differs from the one registered. " &
+      "Ensure the same descriptor instance is used for both registration and validation."
     )
   state.modules[registeredDescriptor.name] = registeredDescriptor
   for importedModule in registeredDescriptor.imports:

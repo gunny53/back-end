@@ -7,6 +7,11 @@ proc removeDirIfExists(path: string) =
     removeDir(path)
 
 suite "phase d scaffolding":
+  test "camel case helper normalizes identifier names":
+    check toCamelCase("user profile") == "userProfile"
+    check toCamelCase("UserProfile") == "userProfile"
+    check toCamelCase("user_profile") == "userProfile"
+
   test "rest starter creates expected files":
     let baseDir = getCurrentDir() / ".tmp-rest-starter"
     removeDirIfExists(baseDir)
