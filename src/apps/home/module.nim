@@ -1,13 +1,11 @@
 import ../../nim_http/kernel/module
 import ./main               # Load controller registration side effects
 import ./services/provider  # Load provider registration side effects
-import ./services/log
-import ./services/user
 
 let HomeModule* = newModuleDescriptor(
   name = "HomeModule",
-  providers = [LogService, UserService],
-  exports = [UserService],
+  providers = homeProviderTokens(),
+  exports = homeExportTokens(),
   controllers = [Home]
 )
 

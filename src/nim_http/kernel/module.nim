@@ -1,6 +1,6 @@
 import sets, tables
-import ../core/di
-import ../core/controller/base
+import ./di
+import ../http/controller
 
 type
   ProviderToken* = object

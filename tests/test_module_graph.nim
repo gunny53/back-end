@@ -44,6 +44,7 @@ suite "module graph":
       name = "FirstModule",
       imports = [second]
     )
+    # Complete the cycle after construction because the descriptors reference each other.
     second.imports = @[first]
 
     var errorMessage = ""

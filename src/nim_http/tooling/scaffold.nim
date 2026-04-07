@@ -355,12 +355,11 @@ Controller __CONTROLLER_NAME__(\"api/v1/__ROUTE_NAME__\"):
 const generatedResourceModuleTemplate = """import ../../nim_http/kernel/module
 import ./main
 import ./services/provider
-import ./services/service
 
 let __MODULE_CONST__* = newModuleDescriptor(
   name = \"__MODULE_CONST__\",
-  providers = [__SERVICE_NAME__],
-  exports = [__SERVICE_NAME__],
+  providers = __RESOURCE_NAME__ProviderTokens(),
+  exports = __RESOURCE_NAME__ExportTokens(),
   controllers = [__CONTROLLER_NAME__]
 )
 
@@ -375,9 +374,16 @@ class __SERVICE_NAME__*() of SingletonObj
 
 const generatedResourceProviderTemplate = """import service
 import ../../../nim_http/kernel/di
+import ../../../nim_http/kernel/module
 
 Injectable:
   __SERVICE_NAME__
+
+proc __RESOURCE_NAME__ProviderTokens*(): seq[ProviderToken] =
+  @[__SERVICE_NAME__]
+
+proc __RESOURCE_NAME__ExportTokens*(): seq[ProviderToken] =
+  @[__SERVICE_NAME__]
 """
 
 proc isAsciiUpper(ch: char): bool =
