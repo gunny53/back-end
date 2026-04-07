@@ -1,356 +1,265 @@
-# NimHTTP Next: Production Framework Roadmap (NestJS / Spring Boot / .NET Core style)
+# Master Plan & Roadmap NimHTTP Production Framework (NestJS / Spring Boot / .NET Core style)
 
-> Mục tiêu: biến codebase hiện tại thành **framework production-grade**, có DX tốt, benchmark rõ ràng, release ổn định, và tốc độ/footprint thuộc nhóm tốt nhất thế giới cho Nim.
+> Mục tiêu: xây dựng NimHTTP thành **production-grade framework** có DX tốt, kiến trúc module rõ ràng, hiệu năng top-tier, release discipline chuẩn enterprise, nhưng vẫn giữ triết lý **nhanh + gọn + nhẹ**.
 
-## 0) Đánh giá nhanh hiện trạng (dựa trên cấu trúc hiện có)
-
-Codebase hiện đã có nền tảng quan trọng:
-
-- `core/app.nim`: bootstrap + lifecycle.
-- `core/controller*`, `core/route*`: decorator routing + binding.
-- `core/di.nim`: DI cơ bản.
-- `core/middleware.nim`, `core/interceptor.nim`, `core/guard.nim`: request pipeline.
-- `core/config.nim`, `core/exception.nim`: config + error abstraction.
-- `src/apps/*`, `src/libs/*`: tổ chức theo module nghiệp vụ.
-
-Nhận định:
-
-1. Đã có “shape” giống NestJS/Spring Boot nhưng còn thiếu “platform maturity” (test matrix, observability sâu, module system chuẩn hóa, release discipline).
-2. Cần chuyển từ “feature-complete” sang “operationally-complete” để production thực chiến.
-3. Cơ hội lớn nhất để “nhanh gọn nhẹ nhất”: giảm dynamic overhead trong pipeline + compile-time registration + zero-copy/data-locality.
+**Skills đang áp dụng cho kế hoạch này**
+- `nim-api-design`: chuẩn hóa public contracts và boundaries.
+- `nim-code-organization`: tái tổ chức modules theo ownership rõ ràng.
+- `nim-error-handling`: quy hoạch chiến lược lỗi theo boundary/pipeline.
 
 ---
 
-## 1) Product Vision + North Star
+## 1) Đánh giá hiện trạng từ codebase hiện tại
 
-### North star (12 tháng)
+### 1.1 Điểm mạnh đã có
+- Đã có shape framework hiện đại: `kernel`, `core`, `pipeline`, `http`, `platform`, `tooling`.
+- Đã có request pipeline primitives: middleware/guard/interceptor.
+- Đã có decorator routing + controller binding.
+- Đã có CLI scaffold và một số test định hướng kiến trúc.
 
-- **Developer Experience**: tạo project mới + chạy endpoint đầu tiên trong < 60 giây.
-- **Performance**: p95 latency cạnh tranh với Go frameworks cho workload JSON API phổ biến.
-- **Reliability**: có compatibility policy, migration guide, LTS branch.
-- **Operability**: logs/metrics/traces chuẩn OpenTelemetry + health/readiness.
-
-### Design principles
-
-1. **Convention over configuration** (Nest/Spring style).
-2. **Compile-time safety first** (Nim strength).
-3. **Minimal runtime reflection**.
-4. **Explicit module boundaries** (module graph rõ ràng).
-5. **Production by default** (timeouts, limits, sane defaults bật sẵn).
+### 1.2 Điểm nghẽn chính (cần refactor để đạt “nhanh nhất”)
+1. **Routing hot path còn linear scan**
+   - Matching route theo kiểu duyệt tuần tự, chưa pre-compile trie/segment index.
+2. **Middleware execute có merge/copy runtime mỗi request**
+   - Tạo danh sách middleware tổng hợp theo route ngay lúc xử lý request gây alloc dư thừa.
+3. **DI container còn string-key và lookup dynamic**
+   - Chi phí hash + cast runtime cao; khó tối ưu compile-time.
+4. **Request scope chưa có memory strategy rõ ràng**
+   - Chưa chuẩn hóa object reuse/pool cho context tần suất cao.
+5. **Observability còn rời rạc**
+   - Thiếu latency histogram/tracing propagation chuẩn OpenTelemetry.
+6. **Release engineering chưa “framework-grade”**
+   - Cần semver discipline, benchmark gate, compatibility/LTS workflow chặt chẽ.
 
 ---
 
-## 2) Kiến trúc mục tiêu của framework
+## 2) North Star 12 tháng
 
-## 2.1 Layering
+### Product KPI
+- **DX**: `nimhttp new` -> first endpoint chạy < 60s.
+- **Performance**: p95 latency cạnh tranh nhóm đầu cho JSON API phổ biến.
+- **Reliability**: release ổn định, migration không đau, policy backward-compat rõ ràng.
+- **Operability**: logs/metrics/traces/probes bật sẵn cho production.
 
-1. **Foundation Layer**
-   - HTTP server adapter, event loop, memory/pool primitives.
-2. **Application Kernel**
-   - Module system, DI container, lifecycle hooks, config profiles.
-3. **Transport Layer**
-   - Router, middleware, guards, interceptors, exception filters, validation pipes.
-4. **Platform Services**
-   - Logging, metrics, tracing, cache abstraction, scheduler, task queue hooks.
-5. **Developer Tooling**
-   - CLI generate/build/test/release, scaffolding, codegen, docs generator.
+### Engineering KPI
+- Startup time giảm >= 30% so với baseline hiện tại.
+- Alloc/request giảm >= 40% ở benchmark CRUD JSON.
+- Throughput tăng >= 2x ở hello/json benchmark.
+- Regression perf gate: PR không được giảm >5% khi không có RFC chấp thuận.
 
-## 2.2 Module model (Nest/Spring-like)
+---
 
-Mỗi module chuẩn:
+## 3) Kiến trúc target (v1.0)
 
-- `controllers`
-- `providers/services`
+## 3.1 Layer chuẩn
+1. **Kernel Layer**: app lifecycle, module graph, DI scopes.
+2. **HTTP Layer**: server adapter, request/response, routing engine.
+3. **Pipeline Layer**: middleware, guards, pipes/validation, interceptors, exception filters.
+4. **Platform Layer**: config profiles, logging, tracing, metrics, health/readiness.
+5. **Tooling Layer**: CLI, generators, testing harness, benchmark harness, release scripts.
+
+## 3.2 Module contract giống Nest/Spring/.NET
+Mỗi module có 5 nhóm rõ ràng:
 - `imports`
+- `providers`
+- `controllers`
 - `exports`
-- `config`
-- `onModuleInit/onModuleDestroy`
+- lifecycle hooks: `onModuleInit`, `onModuleDestroy`
 
-Tạo module graph compile-time + runtime validation:
+Rules:
+- Cấm circular dependency ở compile-time nếu detect được, fallback runtime guard nếu không detect được.
+- Scope rõ ràng: `singleton`, `request`, `transient`.
+- Provider override có API chính thức cho unit/integration test.
 
-- Detect circular dependency sớm.
-- Scope policy rõ ràng: singleton/request/transient.
-- Override provider cho test.
+## 3.3 Request pipeline canonical
+`Request -> Middleware -> Guard -> Pipe/Validation -> Interceptor(before) -> Handler -> Interceptor(after) -> ExceptionFilter -> Response`
 
-## 2.3 Request pipeline chuẩn hóa
-
-`Incoming Request -> Middleware -> Guard -> Pipe/Validation -> Interceptor(before) -> Handler -> Interceptor(after) -> Exception Filter -> Response`
-
-Quy tắc:
-
-- Mỗi stage có contract rõ (input/output/error).
-- Có short-circuit chính thức (guard fail, rate-limit, cached response).
-- Context object immutable-by-default, mutable qua API kiểm soát.
+Rules:
+- Stage contract rõ input/output/error.
+- Chỉ catch lỗi ở boundary có thể recover/translate.
+- Có short-circuit chính thức (auth fail/rate limit/cache hit).
 
 ---
 
-## 3) Roadmap triển khai theo giai đoạn
+## 4) Roadmap triển khai theo quý
 
-## Phase A (0-4 tuần): Stabilize Core + Refactor nền
+## Q1 (0-8 tuần): Stabilize Core + Freeze Public API
 
-Mục tiêu: “khóa API nền” và chuẩn hóa package boundaries.
+### Deliverables
+1. Audit toàn bộ export surface (`core/*`, `kernel/*`, `http/*`, `pipeline/*`, `platform/*`).
+2. Tách rõ stable vs experimental API.
+3. Tạo façade compatibility cho API cũ (deprecate có lộ trình).
+4. Thiết lập benchmark baseline chính thức (hello/json/crud/validation).
 
-Deliverables:
+### Exit Criteria
+- Public API list được freeze cho v0.9.
+- Có báo cáo baseline + artifact CI.
 
-1. **API Surface Audit**
-   - Đánh dấu public/internal cho toàn bộ `nim_http/core/*`.
-   - Tạo tài liệu “stability levels” (experimental/stable/deprecated).
-2. **Refactor package layout**
-   - `src/nim_http/core` -> tách thành:
-     - `kernel/` (app, module, lifecycle, di)
-     - `http/` (request, response, router)
-     - `pipeline/` (middleware, guard, interceptor, pipes)
-     - `platform/` (config, logging, observability)
-3. **Unified error model**
-   - 1 cây lỗi chuẩn + mapping HTTP/gRPC/event.
-4. **Baseline benchmark harness**
-   - Kịch bản hello/json/crud + load profile cố định.
+## Q2 (8-16 tuần): High-performance Runtime
 
-Exit criteria:
+### Deliverables
+1. **Router v2**: segment trie + precompiled param extraction.
+2. **Pipeline planner**: compile middleware chain theo route tại startup (không merge runtime).
+3. **DI v2**: typed tokens, giảm string-key overhead ở hot path.
+4. **Request context pooling**: object reuse + memory locality tối ưu ARC/ORC.
 
-- Core compile green.
-- Public API list được freeze v0.x.
-- Benchmark baseline được publish vào repo CI artifacts.
+### Exit Criteria
+- Throughput tăng >= 2x trên benchmark hello/json.
+- p95 CRUD giảm >= 35%.
 
-## Phase B (4-8 tuần): Module + DI nâng cấp production
+## Q3 (16-24 tuần): Production Hardening
 
-Deliverables:
+### Deliverables
+1. OpenTelemetry tracing + context propagation.
+2. Metrics chuẩn RED/USE + Prometheus exporter.
+3. Security defaults: secure headers, body limit, timeout, rate-limit presets.
+4. Readiness/liveness/startup probes + graceful shutdown chuẩn orchestration.
 
-1. **Module descriptor chuẩn hóa** (imports/providers/exports/controllers).
-2. **DI container v2**
-   - Token typed.
-   - Scope request tối ưu alloc.
-   - Factory async + lifecycle hooks.
-3. **Configuration profiles**
-   - `dev/test/staging/prod` + override theo env.
-4. **Validation & serialization layer**
-   - DTO parsing nhanh, error message chuẩn hóa.
+### Exit Criteria
+- Production checklist pass.
+- Dashboard + runbook incident có sẵn.
 
-Exit criteria:
+## Q4 (24-36 tuần): Ecosystem + v1.0 GA
 
-- E2E tests cho module graph + request scope.
-- P95 không regress >5% so với baseline.
+### Deliverables
+1. CLI hoàn chỉnh: `new/generate/test/bench/release`.
+2. Starter kits: REST, Auth (JWT), Background worker, Modular monolith.
+3. Release automation: semver, changelog, signed artifact, compatibility matrix.
+4. LTS policy + migration guide + deprecation tooling.
 
-## Phase C (8-12 tuần): Observability + Security + Reliability
-
-Deliverables:
-
-1. **OpenTelemetry integration**
-   - trace/span context propagation.
-2. **Metrics**
-   - request latency, error rate, saturation, queue depth.
-3. **Security defaults**
-   - secure headers, body limits, rate-limit policy presets.
-4. **Readiness/Liveness probes**
-   - endpoint chuẩn cho Kubernetes/systemd.
-
-Exit criteria:
-
-- Có dashboard mẫu + runbook incident.
-- Security checklist pass cho OWASP API Top 10 hạng mục cốt lõi.
-
-## Phase D (12-16 tuần): Tooling + Ecosystem + Release readiness
-
-Deliverables:
-
-1. **CLI**: `nimhttp new`, `generate module`, `generate resource`, `test`, `bench`.
-2. **Starter templates**
-   - REST API starter
-   - Auth starter (JWT)
-   - Microservice starter
-3. **Release pipeline**
-   - semantic versioning, changelog automation, signed artifacts.
-4. **Compatibility policy**
-   - deprecation window, migration docs, codemods nếu cần.
-
-Exit criteria:
-
-- v1.0 RC có migration guide + production checklist.
+### Exit Criteria
+- v1.0 GA và tài liệu production end-to-end.
 
 ---
 
-## 4) Kế hoạch refactor cụ thể dựa trên cấu trúc hiện tại
+## 5) Refactor plan chi tiết theo modules/features/platform/libs hiện có
 
-## 4.1 Đề xuất target tree
+## 5.1 `src/nim_http/core/route/*` -> Router Engine v2
 
-```text
-src/nim_http/
-  kernel/
-    application.nim
-    module.nim
-    lifecycle.nim
-    di/
-      container.nim
-      scope.nim
-      token.nim
-  http/
-    server.nim
-    request.nim
-    response.nim
-    routing/
-      matcher.nim
-      registry.nim
-      delegate.nim
-  pipeline/
-    middleware.nim
-    guard.nim
-    interceptor.nim
-    pipe.nim
-    exception_filter.nim
-  platform/
-    config/
-      loader.nim
-      profile.nim
-    observability/
-      logger.nim
-      metrics.nim
-      tracing.nim
-    security/
-      headers.nim
-      ratelimit.nim
-  testing/
-    test_application.nim
-    test_client.nim
-```
+### Hiện tại
+- Parse/match route còn nặng dynamic string operations.
 
-## 4.2 Nguyên tắc refactor “safe & fast”
+### Refactor
+1. Chuẩn hóa route thành `CompiledRoute` tại startup.
+2. Dùng segment trie:
+   - static edges ưu tiên trước param edges.
+   - lưu param slots thay vì map string cho từng request.
+3. Sinh delegate table cố định theo HTTP method.
 
-1. **Strangler pattern**: giữ façade cũ (`core/*`) và forward sang module mới.
-2. **Không breaking change đột ngột**: deprecate 2 minor versions trước khi xóa.
-3. **Mỗi PR chỉ một trục thay đổi**: routing hoặc DI hoặc middleware, tránh PR “big bang”.
-4. **Benchmark gate trong CI**: mọi refactor phải qua perf budget.
+### Kết quả mong đợi
+- O(depth) lookup thay vì linear scan.
+- Giảm allocations/path parsing ở runtime.
 
-## 4.3 Refactor backlog ưu tiên cao
+## 5.2 `src/nim_http/core/middleware.nim` + `pipeline/*`
 
-1. Router path matching tối ưu (precompiled route table).
-2. Request context pooling + object reuse.
-3. Serializer/deserializer fast path cho JSON hot routes.
-4. DI resolution cache cho singleton/transient factories.
-5. Error path hot optimization (tránh string concat dư thừa trên fast path).
+### Hiện tại
+- Hợp nhất middleware global + route-specific ngay mỗi request.
 
----
+### Refactor
+1. Build `PipelinePlan` cho từng route tại boot.
+2. Chain `next` theo kiểu iterative index (tránh closure churn không cần thiết).
+3. Chuẩn hóa request-local context để guards/interceptors chia sẻ metadata.
 
-## 5) “Quy trình chuẩn” để tạo framework nhanh gọn nhẹ nhất
+### Kết quả mong đợi
+- Giảm alloc/request.
+- Dễ quan sát latency theo từng stage.
 
-## 5.1 Engineering operating system (EOS)
+## 5.3 `src/nim_http/core/di.nim` + `kernel/di.nim`
 
-1. **RFC nhẹ** (1-2 trang) cho mọi capability lớn.
-2. **Design review 30 phút** trước khi code.
-3. **Perf contract** bắt buộc cho module nền.
-4. **Definition of Done** gồm:
-   - unit + integration + e2e
-   - benchmark delta
-   - docs + migration note
+### Hiện tại
+- String keys + cast runtime.
 
-## 5.2 CI/CD chuẩn
+### Refactor
+1. Typed token API (generic token object).
+2. Tách resolver theo scope (singleton/request/transient).
+3. Cache resolution graph cho singleton.
+4. Boundary error chuẩn: provider missing/cycle/scope violation.
 
-- Matrix build: Linux/macOS/Windows, Nim stable + devel.
-- Stages:
-  1) lint/style
-  2) unit tests
-  3) integration/e2e
-  4) benchmarks (nightly + PR sample)
-  5) security scan + SBOM
-  6) package publish
+### Kết quả mong đợi
+- Lookup nhanh hơn, lỗi rõ hơn, testability tốt hơn.
 
-## 5.3 Testing pyramid
+## 5.4 `src/nim_http/core/request.nim` + `http/request.nim`
 
-1. **Unit**: pure modules (matcher, serializer, di token).
-2. **Integration**: pipeline ordering, module wiring, config profile.
-3. **E2E**: app boot + real HTTP calls + error scenarios.
-4. **Chaos-lite**: timeout, cancellation, high-concurrency burst.
+### Refactor
+1. Định nghĩa `RequestContext` gọn, immutable-by-default.
+2. Pool object cho các thành phần có tần suất cao (headers map/params buffer).
+3. Tối ưu parser query/params theo fast path ASCII.
 
-## 5.4 Performance playbook
+## 5.5 `src/nim_http/platform/*`
 
-- Đặt budgets: cold start, RSS idle, p50/p95 latency, req/s.
-- Dùng fixed workload + fixed hardware profile để so sánh.
-- Mỗi optimization phải có before/after chart.
-- Track regressions theo commit SHA.
+### Refactor
+1. Config profile loader: `dev/test/staging/prod` + precedence rõ.
+2. Logging structured JSON + correlation IDs.
+3. Metrics exporter + tracing provider plugin.
+
+## 5.6 `src/libs/*`
+
+### Refactor
+- Tách contracts của libs khỏi framework core.
+- Áp dụng interface nhỏ + explicit imports/exports để tránh coupling vòng.
 
 ---
 
-## 6) Feature parity map với NestJS/Spring/.NET
+## 6) Best-practice process để đạt tốc độ cao nhất một cách bền vững
 
-## Core parity (bắt buộc cho v1.0)
+## 6.1 Performance governance
+1. Mọi feature vào hot path phải có **perf contract**.
+2. PR bắt buộc kèm benchmark before/after cho module liên quan.
+3. Duy trì perf dashboard theo commit.
+4. Chỉ tối ưu “measured bottleneck”, không tối ưu cảm tính.
 
-- Module system hoàn chỉnh.
-- DI scopes + lifecycle hooks.
-- Middleware/Guard/Interceptor/Pipe/ExceptionFilter đầy đủ.
-- Config profiles + secrets integration.
-- Validation + serialization chuẩn hóa.
-- Logging/metrics/tracing production-ready.
+## 6.2 RFC + delivery workflow
+1. RFC ngắn (problem, constraints, design, perf impact, migration).
+2. Design review trước khi code.
+3. Triển khai theo strangler pattern, không big-bang rewrite.
+4. Rollout bằng feature flags nếu ảnh hưởng lớn runtime.
 
-## Advanced parity (v1.1+)
+## 6.3 Quality gates
+- Unit tests cho matcher/DI/pipeline planner.
+- Integration tests cho module graph + scope behavior.
+- E2E tests cho lifecycle + error boundary + observability.
+- Compatibility tests cho deprecated API.
 
-- CQRS module.
-- Event bus abstraction.
-- Background jobs/scheduler.
-- OpenAPI generation + client SDK generation.
-
----
-
-## 7) Kế hoạch release production
-
-## v0.8 (Internal beta)
-
-- Freeze API core.
-- Benchmarks + observability nền.
-- Tài liệu migration từ core cũ.
-
-## v0.9 (Public beta)
-
-- CLI + starter templates.
-- Security defaults bật sẵn.
-- Tối thiểu 2 sample apps production-like.
-
-## v1.0 (GA)
-
-- Compatibility policy công bố chính thức.
-- SLO guide + operation runbook.
-- Long-term maintenance branch.
+## 6.4 Release discipline
+- SemVer nghiêm ngặt.
+- Deprecation window tối thiểu 2 minor.
+- MIGRATION_GUIDE cập nhật theo release.
+- Nightly + RC channel trước GA.
 
 ---
 
-## 8) KPI đo thành công
+## 7) Execution board 90 ngày đầu (thực thi ngay)
 
-1. Time-to-first-endpoint (TTFE) < 60s.
-2. p95 latency giảm >= 20% so với baseline hiện tại ở JSON CRUD workload.
-3. Memory RSS giảm >= 15% ở 1k concurrent keep-alive connections.
-4. 0 critical vulnerabilities ở mỗi release gate.
-5. 80%+ public API có docs + example + test coverage.
+### Sprint 1-2
+- Freeze public API + benchmark baseline.
+- Thiết kế Router v2 data model.
 
----
+### Sprint 3-4
+- Implement trie matcher + method dispatch table.
+- Đo và tối ưu alloc/request.
 
-## 9) Kế hoạch thực thi 30 ngày đầu (actionable)
+### Sprint 5-6
+- Pipeline planner startup compile.
+- Refactor middleware chain không merge runtime.
 
-Tuần 1:
+### Sprint 7-8
+- DI typed token + scope resolver.
+- Bổ sung module graph validation.
 
-- Audit public API + annotate stable/experimental.
-- Dựng benchmark harness + CI job nightly.
+### Sprint 9-10
+- OTel traces + latency histogram.
+- Production hardening defaults.
 
-Tuần 2:
-
-- Tách `kernel` + giữ compatibility façade cho `core/*`.
-- Chuẩn hóa error contracts.
-
-Tuần 3:
-
-- DI v2 token typed + request scope tối ưu.
-- Thêm integration tests cho module graph.
-
-Tuần 4:
-
-- Observability tối thiểu (structured log + metrics cơ bản).
-- Public roadmap + v0.8 alpha release notes.
+### Sprint 11-12
+- CLI workflows + release automation + RC docs.
 
 ---
 
-## 10) Kết luận
+## 8) Định nghĩa “nhanh gọn nhẹ nhất thế giới” (thực tế, đo được)
 
-Nếu bám roadmap này, framework sẽ đi đúng quỹ đạo từ “đã có nhiều tính năng” sang “đủ trưởng thành để vận hành production ở quy mô thật”.
+Không tuyên bố bằng slogan; chỉ tuyên bố bằng số liệu:
+- Top-tier p95/p99 trong benchmark công khai.
+- Binary footprint nhỏ, startup nhanh, memory thấp.
+- Tốc độ phát triển cao nhờ module contracts rõ và CLI tốt.
 
-Điểm then chốt để đạt “nhanh gọn nhẹ nhất” không chỉ là viết code nhanh, mà là:
-
-- tối ưu kiến trúc compile-time,
-- kiểm soát perf bằng budget từ CI,
-- giữ API ổn định để ecosystem tăng trưởng bền vững.
+Nếu giữ đúng roadmap + governance ở trên, NimHTTP có khả năng trở thành framework Nim hiện đại mạnh nhất cho production workloads.
