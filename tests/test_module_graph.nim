@@ -14,7 +14,7 @@ suite "module graph":
       imports = ["LeafModule"]
     )
 
-    validateGraph([root, leaf])
+    check validateGraph([root, leaf]) == 2
 
   test "rejects exported providers that are not declared":
     let invalidModule = newModuleDescriptor(

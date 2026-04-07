@@ -9,8 +9,11 @@ import apps/module
 # Initialize configuration
 let config = getConfig()
 
+var moduleRegistry = newModuleRegistry()
+configureApplicationModules(moduleRegistry)
+
 # Validate the application module graph before bootstrapping runtime services
-validateGraph(["ApplicationModule"])
+discard validateGraph(moduleRegistry, ["ApplicationModule"])
 
 # Configure application settings
 let settings = NimHttpApplicationSettings()

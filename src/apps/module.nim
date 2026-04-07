@@ -6,6 +6,8 @@ let ApplicationModule* = newModuleDescriptor(
   imports = ["HomeModule"]
 )
 
-registerModule(ApplicationModule)
+proc configureApplicationModules*(registry: var ModuleRegistry) =
+  registry.registerHomeModule()
+  registry.registerModule(ApplicationModule)
 
 export homeModule

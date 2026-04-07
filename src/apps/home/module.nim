@@ -9,4 +9,5 @@ let HomeModule* = newModuleDescriptor(
   controllers = ["Home"]
 )
 
-registerModule(HomeModule)
+proc registerHomeModule*(registry: var ModuleRegistry) =
+  registry.registerModule(HomeModule)
