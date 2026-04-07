@@ -240,3 +240,7 @@ MIT License
 ## Credits
 
 Inspired by NestJS and Spring Boot frameworks, built with the power of Nim.
+## Strategic Roadmap
+
+- Vietnamese production roadmap: `FRAMEWORK_ROADMAP.vi.md`
+
