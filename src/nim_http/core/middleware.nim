@@ -1,7 +1,7 @@
 ## Middleware Module
 ## Provides middleware architecture for request/response processing
 
-import asyncdispatch, asynchttpserver, tables, times
+import asyncdispatch, asynchttpserver, tables, times, strutils, algorithm, sequtils
 
 type
   NextFunction* = proc(): Future[void] {.gcsafe, closure.}
@@ -11,20 +11,36 @@ type
     next: NextFunction
   ): Future[void] {.gcsafe, closure.}
 
+  PipelinePlan* = object
+    prefix*: string
+    chain*: seq[MiddlewareFunction]
+
   MiddlewareConsumer* = ref object
     middlewares: seq[MiddlewareFunction]
     routes: Table[string, seq[MiddlewareFunction]]
+    compiledPlans: seq[PipelinePlan]
+    pathCache: Table[string, seq[MiddlewareFunction]]
+    needsRecompile: bool
 
 proc newMiddlewareConsumer*(): MiddlewareConsumer =
   ## Creates a new middleware consumer
   MiddlewareConsumer(
     middlewares: @[],
-    routes: initTable[string, seq[MiddlewareFunction]]()
+    routes: initTable[string, seq[MiddlewareFunction]](),
+    compiledPlans: @[],
+    pathCache: initTable[string, seq[MiddlewareFunction]](),
+    needsRecompile: true
   )
+
+proc markDirty(consumer: MiddlewareConsumer) =
+  consumer.needsRecompile = true
+  consumer.compiledPlans.setLen(0)
+  consumer.pathCache.clear()
 
 proc apply*(consumer: MiddlewareConsumer, middleware: MiddlewareFunction) =
   ## Applies middleware to all routes
   consumer.middlewares.add(middleware)
+  consumer.markDirty()
 
 proc apply*(consumer: MiddlewareConsumer, middleware: MiddlewareFunction, routes: seq[string]) =
   ## Applies middleware to specific routes
@@ -32,19 +48,40 @@ proc apply*(consumer: MiddlewareConsumer, middleware: MiddlewareFunction, routes
     if not consumer.routes.hasKey(route):
       consumer.routes[route] = @[]
     consumer.routes[route].add(middleware)
+  consumer.markDirty()
+
+proc compilePipelinePlans*(consumer: MiddlewareConsumer) =
+  ## Compiles middleware plans once at startup to avoid per-request route merges.
+  var prefixes = toSeq(consumer.routes.keys)
+  sort(prefixes, proc(a, b: string): int = cmp(a.len, b.len))
+
+  var plans = newSeqOfCap[PipelinePlan](prefixes.len + 1)
+  plans.add(PipelinePlan(prefix: "", chain: consumer.middlewares))
+  for prefix in prefixes:
+    plans.add(PipelinePlan(prefix: prefix, chain: consumer.routes[prefix]))
+
+  consumer.compiledPlans = plans
+  consumer.needsRecompile = false
+
+proc resolvePlan(consumer: MiddlewareConsumer, path: string): seq[MiddlewareFunction] =
+  if consumer.pathCache.hasKey(path):
+    return consumer.pathCache[path]
+
+  var chain: seq[MiddlewareFunction] = @[]
+  for plan in consumer.compiledPlans:
+    if plan.prefix.len == 0 or path.startsWith(plan.prefix):
+      chain.add(plan.chain)
+
+  consumer.pathCache[path] = chain
+  chain
 
 proc execute*(consumer: MiddlewareConsumer, req: Request): Future[void] {.async.} =
   ## Executes all middlewares for a request
+  if consumer.needsRecompile:
+    consumer.compilePipelinePlans()
+
   var index = 0
-  let allMiddlewares = consumer.middlewares
-  
-  # Get route-specific middlewares
-  var routeMiddlewares: seq[MiddlewareFunction] = @[]
-  for route, mws in consumer.routes:
-    if req.url.path.startsWith(route):
-      routeMiddlewares.add(mws)
-  
-  let totalMiddlewares = allMiddlewares & routeMiddlewares
+  let totalMiddlewares = consumer.resolvePlan(req.url.path)
   
   proc next(): Future[void] {.async, gcsafe.} =
     if index < totalMiddlewares.len:
