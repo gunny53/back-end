@@ -4,6 +4,7 @@ import nim_http/platform/config
 import nim_http/platform/health
 import nim_http/pipeline/middleware
 import nim_http/pipeline/interceptor
+import logging
 import libs/error/handle
 import apps/module
 
@@ -26,7 +27,8 @@ registerReadinessCheck("module_graph", proc(): bool {.gcsafe.} =
   try:
     discard validateGraph(moduleRegistry, ["ApplicationModule"])
     true
-  except CatchableError:
+  except CatchableError as e:
+    error "Readiness check module_graph failed: " & e.msg
     false
 )
 registerReadinessCheck("configuration", proc(): bool {.gcsafe.} =

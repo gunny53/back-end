@@ -53,7 +53,7 @@ proc readinessProbe*(service: string = "NimHTTP Framework"): HealthProbe =
   var checks: seq[HealthCheckStatus] = @[]
   var isReady = true
 
-  for _, readinessEntry in readinessChecks:
+  for checkName, readinessEntry in readinessChecks:
     let passed =
       try:
         readinessEntry.check()
@@ -64,7 +64,7 @@ proc readinessProbe*(service: string = "NimHTTP Framework"): HealthProbe =
       isReady = false
 
     checks.add(HealthCheckStatus(
-      name: readinessEntry.name,
+      name: checkName,
       status: if passed: "ready" else: "not_ready"
     ))
 
