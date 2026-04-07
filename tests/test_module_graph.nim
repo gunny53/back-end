@@ -46,7 +46,8 @@ suite "module graph":
       imports = [second]
     )
     # Complete the cycle after construction because the descriptors reference each other.
-    # Production code should wire descriptors once, then treat them as immutable.
+    # This is test-only setup before validation; production code should not mutate
+    # imports after module registration has completed.
     second.imports = @[first]
 
     var errorMessage = ""

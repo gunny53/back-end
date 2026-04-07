@@ -47,9 +47,13 @@ proc newModuleDescriptor*(
   )
 
 converter toProviderToken*[T: SingletonObj](provider: typedesc[T]): ProviderToken =
+  ## Lets module descriptors accept provider types directly, e.g. `[UserService]`,
+  ## while the registry still resolves providers by their Nim type name string.
   ProviderToken(name: $provider)
 
 converter toControllerToken*[T: BaseController](controller: typedesc[T]): ControllerToken =
+  ## Lets module descriptors accept controller types directly, e.g. `[Home]`,
+  ## while the registry still resolves controllers by their Nim type name string.
   ControllerToken(name: $controller)
 
 proc validate*(descriptor: ModuleDescriptor) =

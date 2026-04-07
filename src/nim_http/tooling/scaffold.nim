@@ -359,8 +359,8 @@ import ./services/provider
 let __MODULE_CONST__* = newModuleDescriptor(
   name = \"__MODULE_CONST__\",
   # Keep provider/export token helpers in services/provider aligned with this module descriptor.
-  providers = __RESOURCE_PROC_PREFIX__ProviderTokens(),
-  exports = __RESOURCE_PROC_PREFIX__ExportTokens(),
+  providers = __resourceProcPrefix__ProviderTokens(),
+  exports = __resourceProcPrefix__ExportTokens(),
   controllers = [__CONTROLLER_NAME__]
 )
 
@@ -380,10 +380,10 @@ import ../../../nim_http/kernel/module
 Injectable:
   __SERVICE_NAME__
 
-proc __RESOURCE_PROC_PREFIX__ProviderTokens*(): seq[ProviderToken] =
+proc __resourceProcPrefix__ProviderTokens*(): seq[ProviderToken] =
   @[__SERVICE_NAME__]
 
-proc __RESOURCE_PROC_PREFIX__ExportTokens*(): seq[ProviderToken] =
+proc __resourceProcPrefix__ExportTokens*(): seq[ProviderToken] =
   @[__SERVICE_NAME__]
 """
 
@@ -554,7 +554,7 @@ proc generateResource*(name: string; root: string = getCurrentDir()) =
   let resourceSnake = toSnakeCase(name)
   let replacements = [
     (key: "__RESOURCE_NAME__", value: resourceName),
-    (key: "__RESOURCE_PROC_PREFIX__", value: toCamelCase(name)),
+    (key: "__resourceProcPrefix__", value: toCamelCase(name)),
     (key: "__CONTROLLER_NAME__", value: resourceName & "Controller"),
     (key: "__MODULE_CONST__", value: resourceName & "Module"),
     (key: "__ROUTE_NAME__", value: toKebabCase(name)),
