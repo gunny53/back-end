@@ -4,7 +4,6 @@ import nim_http/platform/config
 import nim_http/platform/health
 import nim_http/pipeline/middleware
 import nim_http/pipeline/interceptor
-import logging
 import libs/error/handle
 import apps/module
 
@@ -15,7 +14,7 @@ var moduleRegistry = newModuleRegistry()
 configureApplicationModules(moduleRegistry)
 
 # Validate the application module graph before bootstrapping runtime services
-discard validateGraph(moduleRegistry, ["ApplicationModule"])
+let moduleGraphValidated = validateGraph(moduleRegistry, ["ApplicationModule"]) > 0
 
 # Configure application settings
 let settings = NimHttpApplicationSettings()
@@ -24,16 +23,12 @@ settings.port = config.getInt("SERVER_PORT", 8888)
 settings.errorHandle = HttpErrorHandle()
 
 registerReadinessCheck("module_graph", proc(): bool {.gcsafe.} =
-  try:
-    discard validateGraph(moduleRegistry, ["ApplicationModule"])
-    true
-  except CatchableError as e:
-    error "Readiness check module_graph failed: " & e.msg
-    false
+  moduleGraphValidated
 )
 registerReadinessCheck("configuration", proc(): bool {.gcsafe.} =
   settings.host.len > 0 and settings.port > 0
 )
+freezeReadinessChecks()
 
 # Setup middleware
 let middlewareConsumer = getMiddlewareConsumer()

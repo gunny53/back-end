@@ -53,3 +53,10 @@ suite "health probes":
     check probe.checks.len == 1
     check probe.checks[0].name == "module_graph"
     check probe.checks[0].status == "ready"
+
+  test "readiness checks cannot be mutated after freeze":
+    registerReadinessCheck("module_graph", proc(): bool {.gcsafe.} = true)
+    freezeReadinessChecks()
+
+    expect(ValueError):
+      registerReadinessCheck("configuration", proc(): bool {.gcsafe.} = true)

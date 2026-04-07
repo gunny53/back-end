@@ -1,4 +1,4 @@
-import tables, times
+import sequtils, tables, times
 
 type
   HealthCheckStatus* = ref object
@@ -17,12 +17,16 @@ type
     check: proc(): bool {.gcsafe.}
 
 var readinessChecks = initTable[string, ReadinessCheck]() # Register during bootstrap before serving requests.
+var frozenReadinessChecks: seq[ReadinessCheck] = @[]
+var readinessChecksFrozen = false
 
 proc currentProbeTimestamp(): string =
   now().utc.format("yyyy-MM-dd'T'HH:mm:ss'Z'")
 
 proc clearReadinessChecks*() =
   readinessChecks.clear()
+  frozenReadinessChecks.setLen(0)
+  readinessChecksFrozen = false
 
 proc registerReadinessCheck*(
   name: string,
@@ -30,12 +34,24 @@ proc registerReadinessCheck*(
 ) =
   ## Registers or replaces a readiness check by name.
   ## Intended to be called during application bootstrap before the server starts.
+  if readinessChecksFrozen:
+    raise newException(ValueError, "Readiness checks are frozen after bootstrap")
   if name.len == 0:
     raise newException(ValueError, "Readiness check name cannot be empty")
   if check.isNil:
     raise newException(ValueError, "Readiness check handler cannot be nil")
 
   readinessChecks[name] = ReadinessCheck(name: name, check: check)
+
+proc freezeReadinessChecks*() =
+  ## Freezes the readiness registry after bootstrap to avoid runtime mutation.
+  if readinessChecksFrozen:
+    return
+
+  frozenReadinessChecks = @[]
+  for _, readinessEntry in readinessChecks:
+    frozenReadinessChecks.add(readinessEntry)
+  readinessChecksFrozen = true
 
 proc livenessProbe*(service: string = "NimHTTP Framework"): HealthProbe =
   HealthProbe(
@@ -53,7 +69,13 @@ proc readinessProbe*(service: string = "NimHTTP Framework"): HealthProbe =
   var checks: seq[HealthCheckStatus] = @[]
   var isReady = true
 
-  for checkName, readinessEntry in readinessChecks:
+  let activeChecks =
+    if readinessChecksFrozen:
+      frozenReadinessChecks
+    else:
+      toSeq(readinessChecks.values)
+
+  for readinessEntry in activeChecks:
     let passed =
       try:
         readinessEntry.check()
@@ -64,7 +86,7 @@ proc readinessProbe*(service: string = "NimHTTP Framework"): HealthProbe =
       isReady = false
 
     checks.add(HealthCheckStatus(
-      name: checkName,
+      name: readinessEntry.name,
       status: if passed: "ready" else: "not_ready"
     ))
 
