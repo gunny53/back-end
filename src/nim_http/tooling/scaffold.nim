@@ -358,6 +358,7 @@ import ./services/provider
 
 let __MODULE_CONST__* = newModuleDescriptor(
   name = \"__MODULE_CONST__\",
+  # Keep provider/export token helpers in services/provider aligned with this module descriptor.
   providers = __RESOURCE_PROC_PREFIX__ProviderTokens(),
   exports = __RESOURCE_PROC_PREFIX__ExportTokens(),
   controllers = [__CONTROLLER_NAME__]

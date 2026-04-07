@@ -15,6 +15,8 @@ type
     ## registered descriptors as shared immutable graph nodes after wiring.
     ## The public `imports` field remains mutable only to support graph assembly
     ## and explicit cycle construction in tests before validation runs.
+    ## Post-registration mutation is not an intended runtime API; validation
+    ## assumes the descriptor graph is stable once registration is complete.
     name*: string
     imports*: seq[ModuleDescriptor]
     providers*: seq[ProviderToken]
@@ -151,13 +153,6 @@ proc collectRegisteredModule(
     raise newException(ValueError, "Unknown registered module " & descriptor.name)
 
   let registeredDescriptor = registry.descriptors[descriptor.name]
-  if registeredDescriptor != descriptor:
-    raise newException(
-      ValueError,
-      "Module descriptor mismatch for module '" & descriptor.name &
-      "'. The descriptor instance passed for validation differs from the one registered. " &
-      "Ensure the same descriptor instance is used for both registration and validation."
-    )
   state.modules[registeredDescriptor.name] = registeredDescriptor
   for importedModule in registeredDescriptor.imports:
     collectRegisteredModule(state, registry, importedModule)
