@@ -16,7 +16,7 @@ type
     name: string
     check: proc(): bool {.gcsafe.}
 
-var readinessChecks = initTable[string, ReadinessCheck]()
+var readinessChecks = initTable[string, ReadinessCheck]() # Register during bootstrap before serving requests.
 
 proc currentProbeTimestamp(): string =
   now().utc.format("yyyy-MM-dd'T'HH:mm:ss'Z'")
@@ -28,6 +28,8 @@ proc registerReadinessCheck*(
   name: string,
   check: proc(): bool {.gcsafe.}
 ) =
+  ## Registers or replaces a readiness check by name.
+  ## Intended to be called during application bootstrap before the server starts.
   if name.len == 0:
     raise newException(ValueError, "Readiness check name cannot be empty")
   if check.isNil:
@@ -45,6 +47,9 @@ proc livenessProbe*(service: string = "NimHTTP Framework"): HealthProbe =
   )
 
 proc readinessProbe*(service: string = "NimHTTP Framework"): HealthProbe =
+  ## Builds the current readiness report from registered checks.
+  ## When no explicit checks are registered, the probe returns a synthetic
+  ## `startup=ready` check so orchestration endpoints still have a stable payload.
   var checks: seq[HealthCheckStatus] = @[]
   var isReady = true
 

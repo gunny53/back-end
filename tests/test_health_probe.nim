@@ -2,7 +2,7 @@ import unittest, strutils
 
 import nim_http/platform/health
 
-proc hasIsoTimestampFormat(value: string): bool =
+proc isValidHealthProbeTimestamp(value: string): bool =
   if value.len != 20:
     return false
   if value[4] != '-' or value[7] != '-' or value[10] != 'T':
@@ -29,7 +29,7 @@ suite "health probes":
     check probe.probe == "liveness"
     check probe.service == "TestService"
     check probe.checks.len == 0
-    check hasIsoTimestampFormat(probe.timestamp)
+    check isValidHealthProbeTimestamp(probe.timestamp)
 
   test "readiness probe aggregates registered checks":
     registerReadinessCheck("module_graph", proc(): bool {.gcsafe.} = true)
@@ -41,7 +41,7 @@ suite "health probes":
     check probe.probe == "readiness"
     check probe.service == "TestService"
     check probe.checks.len == 2
-    check hasIsoTimestampFormat(probe.timestamp)
+    check isValidHealthProbeTimestamp(probe.timestamp)
 
   test "duplicate readiness check names are updated in place":
     registerReadinessCheck("module_graph", proc(): bool {.gcsafe.} = false)
