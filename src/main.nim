@@ -1,12 +1,16 @@
 import nim_http/kernel/application
+import nim_http/kernel/module
 import nim_http/platform/config
 import nim_http/pipeline/middleware
 import nim_http/pipeline/interceptor
 import libs/error/handle
-import apps/home/main
+import apps/module
 
 # Initialize configuration
 let config = getConfig()
+
+# Validate the application module graph before bootstrapping runtime services
+validateGraph([ApplicationModule, HomeModule])
 
 # Configure application settings
 let settings = NimHttpApplicationSettings()
