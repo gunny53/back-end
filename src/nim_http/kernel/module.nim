@@ -69,6 +69,8 @@ proc visitModule(state: var ModuleGraphState, moduleName: string) =
   ## Performs a depth-first walk over the resolved module graph.
   ## `active` tracks the current recursion stack for cycle detection, while
   ## `visited` skips modules whose import subgraphs have already been validated.
+  if not state.modules.hasKey(moduleName):
+    raise newException(ValueError, "Unknown module in validation state " & moduleName)
   if moduleName in state.active:
     raise newException(ValueError, "Circular module dependency detected at " & moduleName)
   if moduleName in state.visited:

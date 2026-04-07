@@ -47,3 +47,4 @@ suite "module graph":
       errorMessage = exc.msg
 
     check errorMessage.contains("Circular module dependency detected")
+    check errorMessage.contains("FirstModule") or errorMessage.contains("SecondModule")

@@ -1,6 +1,6 @@
 import ../../nim_http/kernel/module
-import ./main
-import ./services/provider
+import ./main               # Load controller registration side effects
+import ./services/provider  # Load provider registration side effects
 
 let HomeModule* = newModuleDescriptor(
   name = "HomeModule",
