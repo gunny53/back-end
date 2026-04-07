@@ -2,6 +2,8 @@ import unittest, strutils
 
 import nim_http/platform/health
 
+const TimestampSeparatorPositions = [4, 7, 10, 13, 16, 19]
+
 proc isValidHealthProbeTimestamp(value: string): bool =
   if value.len != 20:
     return false
@@ -11,7 +13,7 @@ proc isValidHealthProbeTimestamp(value: string): bool =
     return false
 
   for index, ch in value:
-    if index in [4, 7, 10, 13, 16, 19]:
+    if index in TimestampSeparatorPositions:
       continue
     if not ch.isDigit():
       return false

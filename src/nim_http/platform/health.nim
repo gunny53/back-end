@@ -1,3 +1,8 @@
+## Health probe utilities for liveness and readiness endpoints.
+## Readiness checks are registered during application bootstrap, then frozen
+## before the HTTP server begins serving requests, so probe reads observe a
+## stable snapshot instead of mutating shared state at runtime.
+
 import sequtils, tables, times
 
 type
@@ -16,7 +21,7 @@ type
     name: string
     check: proc(): bool {.gcsafe.}
 
-var readinessChecks = initTable[string, ReadinessCheck]() # Register during bootstrap before serving requests.
+var readinessChecks = initTable[string, ReadinessCheck]()
 var frozenReadinessChecks: seq[ReadinessCheck] = @[]
 var readinessChecksFrozen = false
 
