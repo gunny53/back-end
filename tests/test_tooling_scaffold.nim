@@ -17,7 +17,7 @@ suite "phase d scaffolding":
     check fileExists(baseDir / "src/apps/home/main.nim")
     check fileExists(baseDir / "src/apps/health/main.nim")
     check fileExists(baseDir / "benchmarks/bench.nim")
-    check fileExists(baseDir / ("" & toSnakeCase("tmp-rest-starter") & ".nimble"))
+    check fileExists(baseDir / (toSnakeCase("tmp-rest-starter") & ".nimble"))
 
     removeDirIfExists(baseDir)
 
