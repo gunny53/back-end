@@ -16,7 +16,7 @@ type
   ModuleRegistry = ref object
     descriptors: Table[string, ModuleDescriptor]
 
-var globalModuleRegistry {.threadvar.}: ModuleRegistry
+var globalModuleRegistry: ModuleRegistry
 
 proc newModuleDescriptor*(
   name: string,

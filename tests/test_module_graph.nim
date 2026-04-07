@@ -4,7 +4,6 @@ import nim_http/kernel/module
 
 suite "module graph":
   test "accepts a valid module graph":
-    var validated = false
     let leaf = newModuleDescriptor(
       name = "LeafModule",
       providers = ["LeafService"],
@@ -16,8 +15,6 @@ suite "module graph":
     )
 
     validateGraph([root, leaf])
-    validated = true
-    check validated
 
   test "rejects exported providers that are not declared":
     let invalidModule = newModuleDescriptor(
