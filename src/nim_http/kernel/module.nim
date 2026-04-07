@@ -13,6 +13,8 @@ type
     ## Ref semantics let modules point at imported module descriptors directly,
     ## including cyclic graphs used in validation tests. Callers should treat
     ## registered descriptors as shared immutable graph nodes after wiring.
+    ## The public `imports` field remains mutable only to support graph assembly
+    ## and explicit cycle construction in tests before validation runs.
     name*: string
     imports*: seq[ModuleDescriptor]
     providers*: seq[ProviderToken]

@@ -358,8 +358,8 @@ import ./services/provider
 
 let __MODULE_CONST__* = newModuleDescriptor(
   name = \"__MODULE_CONST__\",
-  providers = __RESOURCE_NAME__ProviderTokens(),
-  exports = __RESOURCE_NAME__ExportTokens(),
+  providers = __RESOURCE_PROC_PREFIX__ProviderTokens(),
+  exports = __RESOURCE_PROC_PREFIX__ExportTokens(),
   controllers = [__CONTROLLER_NAME__]
 )
 
@@ -379,10 +379,10 @@ import ../../../nim_http/kernel/module
 Injectable:
   __SERVICE_NAME__
 
-proc __RESOURCE_NAME__ProviderTokens*(): seq[ProviderToken] =
+proc __RESOURCE_PROC_PREFIX__ProviderTokens*(): seq[ProviderToken] =
   @[__SERVICE_NAME__]
 
-proc __RESOURCE_NAME__ExportTokens*(): seq[ProviderToken] =
+proc __RESOURCE_PROC_PREFIX__ExportTokens*(): seq[ProviderToken] =
   @[__SERVICE_NAME__]
 """
 
@@ -426,6 +426,11 @@ proc joinPascal(words: seq[string]): string =
 
 proc toPascalCase*(value: string): string =
   joinPascal(requireWords(value, "Identifier"))
+
+proc toCamelCase*(value: string): string =
+  result = toPascalCase(value)
+  if result.len > 0:
+    result[0] = lowerAscii(result[0])
 
 proc toSnakeCase*(value: string): string =
   requireWords(value, "Identifier").join("_")
@@ -548,6 +553,7 @@ proc generateResource*(name: string; root: string = getCurrentDir()) =
   let resourceSnake = toSnakeCase(name)
   let replacements = [
     (key: "__RESOURCE_NAME__", value: resourceName),
+    (key: "__RESOURCE_PROC_PREFIX__", value: toCamelCase(name)),
     (key: "__CONTROLLER_NAME__", value: resourceName & "Controller"),
     (key: "__MODULE_CONST__", value: resourceName & "Module"),
     (key: "__ROUTE_NAME__", value: toKebabCase(name)),
