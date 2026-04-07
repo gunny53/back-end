@@ -1,0 +1,8 @@
+version: '3.9'
+
+services:
+  nimapp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nim_web

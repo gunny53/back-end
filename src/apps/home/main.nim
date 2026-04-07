@@ -1,14 +1,34 @@
-import ../../nim_http/core/[controller, utils, di], options
-import ./services/[user_service, log_service]
+import ../../nim_http/core/controller
+import ../../libs/auth/auth_guard
+import asyncdispatch
 
-type HomeController* = ref object of BaseController
-  userService* {.inject.}: UserService
-  logService* {.inject.}: LogService
+type UserDto = ref object
+  username: string  
 
-Controller(HomeController, ""):
-  proc index*() =
-    let name = QueryOpt[string]("name")
-    let age  = QueryOpt[int]("age").getOrElse(9)
-    echo name.getOrElse("aga")
-    echo age
-    Ok("Hello from HomeController!" &  this.userService.name)
+Controller Home("api/v1"):
+
+  [GET("index")]
+  [UseGuard(AuthGuard)]
+  proc index() = Http200 "Hello from HomeController! " 
+
+  [GET("users/:id")]
+  [UseGuard(AuthGuard)]
+  proc users(
+    id   {.param.}: int,
+    name {.query.}: string,
+    user {.body.}:  UserDto
+  ) = 
+    Http200 user
+
+  [GET("account/:id")]
+  proc accounts(
+    id   {.param.}: int,
+    name {.query.}: string
+  ) =
+    if name == "":
+      Http400 "erro"
+    Http200 "Hello from accounts! " & $id & ", name = " & name
+
+  [GET]
+  proc html() =
+    Http200 "<html>hello mf</html>"

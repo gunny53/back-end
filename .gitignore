@@ -1,0 +1,67 @@
+# =====================
+# Nim .gitignore
+# =====================
+
+# Nimble package files
+nimcache/
+*.nimble.cache
+
+# Binary / build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+*.out
+*.app
+*.a
+*.o
+*.obj
+/nim_http
+/main
+
+# VSCode / Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
+logs/
+
+# Nim doc/output
+doc/
+htmldocs/
+
+# User/test-generated files
+*.bak
+*.tmp
+*.test
+
+# Environment and configuration
+.env
+.env.local
+.env.*.local
+config/local.json
+secrets/
+
+# Dependencies
+node_modules/
+vendor/
+
+# Test coverage
+coverage/
+*.coverage
+
+# Docker volumes
+.docker/volumes/
+
+# IDE specific
+*.iml
+.project
+.classpath
+.settings/
