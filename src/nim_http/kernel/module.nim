@@ -13,6 +13,11 @@ type
     visited: HashSet[string]
     active: HashSet[string]
 
+  ModuleRegistry = ref object
+    descriptors: Table[string, ModuleDescriptor]
+
+var globalModuleRegistry {.threadvar.}: ModuleRegistry
+
 proc newModuleDescriptor*(
   name: string,
   imports: openArray[string] = [],
@@ -51,6 +56,19 @@ proc validate*(descriptor: ModuleDescriptor) =
         "Exported provider '" & exportedProvider & "' must also be declared in providers for module " & descriptor.name
       )
 
+proc initModuleRegistry() =
+  if globalModuleRegistry.isNil:
+    globalModuleRegistry = ModuleRegistry(
+      descriptors: initTable[string, ModuleDescriptor]()
+    )
+
+proc registerModule*(descriptor: ModuleDescriptor) =
+  initModuleRegistry()
+  descriptor.validate()
+  if globalModuleRegistry.descriptors.hasKey(descriptor.name):
+    raise newException(ValueError, "Duplicate module descriptor: " & descriptor.name)
+  globalModuleRegistry.descriptors[descriptor.name] = descriptor
+
 proc visitModule(state: var ModuleGraphState, moduleName: string) =
   if moduleName in state.active:
     raise newException(ValueError, "Circular module dependency detected at " & moduleName)
@@ -63,20 +81,18 @@ proc visitModule(state: var ModuleGraphState, moduleName: string) =
   state.active.excl(moduleName)
   state.visited.incl(moduleName)
 
-proc validateGraph*(descriptors: openArray[ModuleDescriptor]) =
-  var state = ModuleGraphState(
+proc newModuleGraphState(): ModuleGraphState =
+  ModuleGraphState(
     modules: initTable[string, ModuleDescriptor](),
     visited: initHashSet[string](),
     active: initHashSet[string]()
   )
 
-  for descriptor in descriptors:
+proc validateState(state: var ModuleGraphState) =
+  for _, descriptor in state.modules:
     descriptor.validate()
-    if state.modules.hasKey(descriptor.name):
-      raise newException(ValueError, "Duplicate module descriptor: " & descriptor.name)
-    state.modules[descriptor.name] = descriptor
 
-  for descriptor in descriptors:
+  for _, descriptor in state.modules:
     for importedModule in descriptor.imports:
       if importedModule.len == 0:
         raise newException(ValueError, "Imported module name cannot be empty in module " & descriptor.name)
@@ -88,5 +104,34 @@ proc validateGraph*(descriptors: openArray[ModuleDescriptor]) =
           "Module " & descriptor.name & " imports unknown module " & importedModule
         )
 
-  for descriptor in descriptors:
+  for _, descriptor in state.modules:
     visitModule(state, descriptor.name)
+
+proc collectRegisteredModule(state: var ModuleGraphState, moduleName: string) =
+  initModuleRegistry()
+  if moduleName.len == 0:
+    raise newException(ValueError, "Root module name cannot be empty")
+  if state.modules.hasKey(moduleName):
+    return
+  if not globalModuleRegistry.descriptors.hasKey(moduleName):
+    raise newException(ValueError, "Unknown registered module " & moduleName)
+
+  let descriptor = globalModuleRegistry.descriptors[moduleName]
+  state.modules[moduleName] = descriptor
+  for importedModule in descriptor.imports:
+    collectRegisteredModule(state, importedModule)
+
+proc validateGraph*(descriptors: openArray[ModuleDescriptor]) =
+  var state = newModuleGraphState()
+  for descriptor in descriptors:
+    descriptor.validate()
+    if state.modules.hasKey(descriptor.name):
+      raise newException(ValueError, "Duplicate module descriptor: " & descriptor.name)
+    state.modules[descriptor.name] = descriptor
+  validateState(state)
+
+proc validateGraph*(rootModules: openArray[string]) =
+  var state = newModuleGraphState()
+  for rootModule in rootModules:
+    collectRegisteredModule(state, rootModule)
+  validateState(state)

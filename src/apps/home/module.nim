@@ -8,3 +8,5 @@ let HomeModule* = newModuleDescriptor(
   exports = ["UserService"],
   controllers = ["Home"]
 )
+
+registerModule(HomeModule)

@@ -6,4 +6,6 @@ let ApplicationModule* = newModuleDescriptor(
   imports = ["HomeModule"]
 )
 
+registerModule(ApplicationModule)
+
 export homeModule

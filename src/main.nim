@@ -10,7 +10,7 @@ import apps/module
 let config = getConfig()
 
 # Validate the application module graph before bootstrapping runtime services
-validateGraph([ApplicationModule, HomeModule])
+validateGraph(["ApplicationModule"])
 
 # Configure application settings
 let settings = NimHttpApplicationSettings()
