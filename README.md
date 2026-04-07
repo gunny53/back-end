@@ -25,11 +25,14 @@ A high-performance, async web framework for Nim inspired by NestJS and Spring Bo
 git clone <repository-url>
 cd back-end
 
-# Build the project
+# Build the example application
 nim c --define:release --threads:on src/main.nim
 
 # Run the application
 ./src/main
+
+# Install the Phase D CLI
+nimble install
 ```
 
 ### Using Docker
@@ -41,6 +44,21 @@ docker-compose up --build
 # Or build Docker image manually
 docker build -t nimhttp .
 docker run -p 8888:8888 nimhttp
+```
+
+### CLI Quick Start
+
+```bash
+# Generate a starter project
+nimhttp new rest-api ./examples/rest-api-starter
+
+# Generate application code inside an existing repo
+nimhttp generate module Billing .
+nimhttp generate resource UserProfile .
+
+# Run the standard project commands
+nimhttp test
+nimhttp bench
 ```
 
 ## Project Structure
@@ -216,7 +234,10 @@ nim c -r --threads:on src/main.nim
 
 ```bash
 # Run tests
-nim c -r tests/test_all.nim
+nimble test
+
+# Run the default benchmark harness
+nim c -r benchmarks/bench.nim
 ```
 
 ## Architecture
@@ -240,7 +261,10 @@ MIT License
 ## Credits
 
 Inspired by NestJS and Spring Boot frameworks, built with the power of Nim.
+
 ## Strategic Roadmap
 
-- Vietnamese production roadmap: `FRAMEWORK_ROADMAP.vi.md`
-
+- Vietnamese production roadmap: [FRAMEWORK_ROADMAP.vi.md](FRAMEWORK_ROADMAP.vi.md)
+- Compatibility policy: [docs/COMPATIBILITY_POLICY.md](docs/COMPATIBILITY_POLICY.md)
+- Migration guide: [docs/MIGRATION_GUIDE.md](docs/MIGRATION_GUIDE.md)
+- Production checklist: [docs/PRODUCTION_CHECKLIST.md](docs/PRODUCTION_CHECKLIST.md)
