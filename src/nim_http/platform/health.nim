@@ -26,7 +26,8 @@ var frozenReadinessChecks: seq[ReadinessCheck] = @[]
 var readinessChecksFrozen = false
 
 proc currentProbeTimestamp(): string =
-  ## Emit an ISO-like UTC timestamp using literal `T` and `Z` separators.
+  ## Emit an ISO-like UTC timestamp; single quotes in the format string make
+  ## `T` and `Z` literal output characters rather than format directives.
   now().utc.format("yyyy-MM-dd'T'HH:mm:ss'Z'")
 
 proc clearReadinessChecks*() =
