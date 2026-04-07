@@ -1,4 +1,4 @@
-import asynchttpserver, asyncdispatch, strutils, logging, tables
+import asynchttpserver, asyncdispatch, strutils, logging, tables, json
 import route
 import exception
 import middleware
@@ -31,8 +31,7 @@ proc processRequestWithMiddleware(
   app: NimHttpApplication,
   req: Request
 ): Future[void] {.async.} =
-  ## Processes request through middleware pipeline then routing
-  var processed = false
+  ## Processes request through middleware pipeline then routing with interceptors
   
   # Create middleware consumer if not exists
   if app.settings.middleware.isNil:
@@ -42,10 +41,21 @@ proc processRequestWithMiddleware(
   try:
     await app.settings.middleware.execute(req)
     
-    # After middleware, process the route
+    # After middleware, process the route with interceptors
     debug "Processing route: " & req.url.path
-    await req.process
-    processed = true
+    
+    # Create execution context for interceptors
+    let context = ExecutionContext(
+      request: req,
+      handler: req.url.path,
+      startTime: cpuTime(),
+      metadata: newJNull()
+    )
+    
+    # Apply interceptors around route processing
+    await applyInterceptors(context, proc(): Future[void] {.async, gcsafe, closure.} =
+      await req.process
+    )
     
   except HttpException as e:
     # Handle HTTP exceptions
@@ -54,7 +64,6 @@ proc processRequestWithMiddleware(
     else:
       app.settings.errorHandle.exception = e
     await app.settings.errorHandle.catch(req)
-    processed = true
     
   except CatchableError as e:
     # Handle other errors
@@ -65,7 +74,6 @@ proc processRequestWithMiddleware(
     else:
       app.settings.errorHandle.exception = httpEx
     await app.settings.errorHandle.catch(req)
-    processed = true
 
 proc start*(this: NimHttpApplication) =
   info """███╗   ██╗██╗███╗   ███╗ █████╗ ███████╗██╗  ██╗"""

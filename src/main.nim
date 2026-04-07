@@ -38,6 +38,9 @@ if config.getBool("RATE_LIMIT_ENABLED", true):
 let maxBodySize = config.getInt("MAX_BODY_SIZE", 10_000_000)
 middlewareConsumer.apply(bodyParserMiddleware(maxBodySize))
 
+# Attach configured middleware to application settings
+settings.middleware = middlewareConsumer
+
 # Setup interceptors
 if config.getBool("LOGGING_ENABLED", true):
   let loggingInterceptor = LoggingInterceptor(verbose: true)

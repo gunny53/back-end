@@ -16,8 +16,8 @@ nimcache/
 *.a
 *.o
 *.obj
-nim_http
-main
+/nim_http
+/main
 
 # VSCode / Editor files
 .vscode/

@@ -44,8 +44,13 @@ proc register*[T: SingletonObj](
   factory: proc(): SingletonObj {.gcsafe.} = nil
 ) =
   ## Registers a provider with the DI container
+  ## For Singleton and Transient scopes, a factory function is required
   initRegistry()
   let key = $t
+  
+  # Require factory for non-Request scopes to avoid unusable providers
+  if scope != Request and factory.isNil:
+    raise newException(ValueError, "Factory function required for " & $scope & " scope when registering " & key)
   
   var metadata = ProviderMetadata(scope: scope, factory: factory)
   
