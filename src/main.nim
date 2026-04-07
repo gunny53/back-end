@@ -1,18 +1,34 @@
-import nim_http/core/app
-import nim_http/core/config
-import nim_http/core/middleware
-import nim_http/core/interceptor
+import nim_http/kernel/application
+import nim_http/kernel/module
+import nim_http/platform/config
+import nim_http/platform/health
+import nim_http/pipeline/middleware
+import nim_http/pipeline/interceptor
 import libs/error/handle
-import apps/home/main
+import apps/module
 
 # Initialize configuration
 let config = getConfig()
+
+var moduleRegistry = newModuleRegistry()
+configureApplicationModules(moduleRegistry)
+
+# Validate the application module graph before bootstrapping runtime services
+let moduleGraphValidated = validateGraph(moduleRegistry, [ApplicationModule]) > 0
 
 # Configure application settings
 let settings = NimHttpApplicationSettings()
 settings.host = config.get("SERVER_HOST", "127.0.0.1")
 settings.port = config.getInt("SERVER_PORT", 8888)
 settings.errorHandle = HttpErrorHandle()
+
+registerReadinessCheck("module_graph", proc(): bool {.gcsafe.} =
+  moduleGraphValidated
+)
+registerReadinessCheck("configuration", proc(): bool {.gcsafe.} =
+  settings.host.len > 0 and settings.port > 0
+)
+freezeReadinessChecks()
 
 # Setup middleware
 let middlewareConsumer = getMiddlewareConsumer()

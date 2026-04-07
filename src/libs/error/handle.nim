@@ -1,4 +1,5 @@
-import ../../nim_http/core/[exception, app]
+import ../../nim_http/platform/exception
+import ../../nim_http/kernel/application
 import asyncdispatch, asynchttpserver, json
 
 type HttpErrorHandle* = ref object of NimHttpApplicationErrorHandle

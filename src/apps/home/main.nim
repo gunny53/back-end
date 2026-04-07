@@ -1,4 +1,4 @@
-import ../../nim_http/core/controller
+import ../../nim_http/http/controller
 import ../../libs/auth/auth_guard
 import asyncdispatch
 

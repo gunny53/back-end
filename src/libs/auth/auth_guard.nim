@@ -1,5 +1,7 @@
 import asynchttpserver
-import ../../nim_http/core/[guard, exception, di]
+import ../../nim_http/pipeline/guard
+import ../../nim_http/platform/exception
+import ../../nim_http/kernel/di
 
 class AuthGuard*() of Guard:
 

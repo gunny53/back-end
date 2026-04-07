@@ -1,12 +1,12 @@
 # Package
 
-version       = "0.1.0"
+version       = "0.2.0"
 author        = "Hoang Tat Hieu"
-description   = "Web framework for nimer"
+description   = "Web framework for Nim with Phase D CLI tooling"
 license       = "MIT"
 srcDir        = "src"
 installExt    = @["nim"]
-bin           = @["nim_http"]
+bin           = @["nimhttp"]
 
 
 # Dependencies
