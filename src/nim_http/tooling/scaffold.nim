@@ -160,7 +160,7 @@ import ./main
 
 let HealthModule* = newModuleDescriptor(
   name = \"HealthModule\",
-  controllers = [\"HealthCheck\"]
+  controllers = [HealthCheck]
 )
 
 proc registerHealthModule*(registry: var ModuleRegistry) =
@@ -181,7 +181,7 @@ import ./main
 
 let HomeModule* = newModuleDescriptor(
   name = \"HomeModule\",
-  controllers = [\"Home\"]
+  controllers = [Home]
 )
 
 proc registerHomeModule*(registry: var ModuleRegistry) =
@@ -194,7 +194,7 @@ import ./health/module as healthModule
 
 let ApplicationModule* = newModuleDescriptor(
   name = \"ApplicationModule\",
-  imports = [\"HomeModule\", \"HealthModule\"]
+  imports = [homeModule.HomeModule, healthModule.HealthModule]
 )
 
 proc configureApplicationModules*(registry: var ModuleRegistry) =
@@ -242,7 +242,7 @@ import ./main
 
 let AuthModule* = newModuleDescriptor(
   name = \"AuthModule\",
-  controllers = [\"AuthController\"]
+  controllers = [AuthController]
 )
 
 proc registerAuthModule*(registry: var ModuleRegistry) =
@@ -255,7 +255,7 @@ import ./health/module as healthModule
 
 let ApplicationModule* = newModuleDescriptor(
   name = \"ApplicationModule\",
-  imports = [\"AuthModule\", \"HealthModule\"]
+  imports = [authModule.AuthModule, healthModule.HealthModule]
 )
 
 proc configureApplicationModules*(registry: var ModuleRegistry) =
@@ -281,7 +281,7 @@ import ./main
 
 let ServiceStatusModule* = newModuleDescriptor(
   name = \"ServiceStatusModule\",
-  controllers = [\"ServiceStatus\"]
+  controllers = [ServiceStatus]
 )
 
 proc registerServiceStatusModule*(registry: var ModuleRegistry) =
@@ -294,7 +294,7 @@ import ./status/module as statusModule
 
 let ApplicationModule* = newModuleDescriptor(
   name = \"ApplicationModule\",
-  imports = [\"ServiceStatusModule\", \"HealthModule\"]
+  imports = [statusModule.ServiceStatusModule, healthModule.HealthModule]
 )
 
 proc configureApplicationModules*(registry: var ModuleRegistry) =
@@ -331,7 +331,7 @@ import ./main
 
 let __MODULE_CONST__* = newModuleDescriptor(
   name = \"__MODULE_CONST__\",
-  controllers = [\"__CONTROLLER_NAME__\"]
+  controllers = [__CONTROLLER_NAME__]
 )
 
 proc register__MODULE_CONST__*(registry: var ModuleRegistry) =
@@ -355,12 +355,13 @@ Controller __CONTROLLER_NAME__(\"api/v1/__ROUTE_NAME__\"):
 const generatedResourceModuleTemplate = """import ../../nim_http/kernel/module
 import ./main
 import ./services/provider
+import ./services/service
 
 let __MODULE_CONST__* = newModuleDescriptor(
   name = \"__MODULE_CONST__\",
-  providers = [\"__SERVICE_NAME__\"],
-  exports = [\"__SERVICE_NAME__\"],
-  controllers = [\"__CONTROLLER_NAME__\"]
+  providers = [__SERVICE_NAME__],
+  exports = [__SERVICE_NAME__],
+  controllers = [__CONTROLLER_NAME__]
 )
 
 proc register__MODULE_CONST__*(registry: var ModuleRegistry) =

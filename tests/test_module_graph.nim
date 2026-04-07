@@ -2,43 +2,49 @@ import unittest
 import strutils
 
 import nim_http/kernel/module
+import nim_http/kernel/di
+
+type
+  LeafService = ref object of SingletonObj
+  HiddenService = ref object of SingletonObj
 
 suite "module graph":
   test "accepts a valid module graph":
     var registry = newModuleRegistry()
     let leaf = newModuleDescriptor(
       name = "LeafModule",
-      providers = ["LeafService"],
-      exports = ["LeafService"]
+      providers = [LeafService],
+      exports = [LeafService]
     )
     let root = newModuleDescriptor(
       name = "RootModule",
-      imports = ["LeafModule"]
+      imports = [leaf]
     )
 
     registry.registerModule(leaf)
     registry.registerModule(root)
 
-    check validateGraph(registry, ["RootModule"]) == 2
+    check validateGraph(registry, [root]) == 2
 
   test "rejects exported providers that are not declared":
     let invalidModule = newModuleDescriptor(
       name = "InvalidModule",
-      exports = ["MissingProvider"]
+      exports = [HiddenService]
     )
 
     expect(ValueError):
       invalidModule.validate()
 
   test "rejects circular module imports":
-    let first = newModuleDescriptor(
-      name = "FirstModule",
-      imports = ["SecondModule"]
-    )
     let second = newModuleDescriptor(
       name = "SecondModule",
-      imports = ["FirstModule"]
+      imports = []
     )
+    let first = newModuleDescriptor(
+      name = "FirstModule",
+      imports = [second]
+    )
+    second.imports = @[first]
 
     var errorMessage = ""
     try:

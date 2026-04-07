@@ -3,7 +3,7 @@ import ./main  # Load controller registration side effects
 
 let HealthModule* = newModuleDescriptor(
   name = "HealthModule",
-  controllers = ["HealthCheck"]
+  controllers = [HealthCheck]
 )
 
 proc registerHealthModule*(registry: var ModuleRegistry) =

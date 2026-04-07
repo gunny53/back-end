@@ -4,7 +4,7 @@ import ./health/module as healthModule
 
 let ApplicationModule* = newModuleDescriptor(
   name = "ApplicationModule",
-  imports = ["HomeModule", "HealthModule"]
+  imports = [homeModule.HomeModule, healthModule.HealthModule]
 )
 
 proc configureApplicationModules*(registry: var ModuleRegistry) =

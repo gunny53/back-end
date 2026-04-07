@@ -14,7 +14,7 @@ var moduleRegistry = newModuleRegistry()
 configureApplicationModules(moduleRegistry)
 
 # Validate the application module graph before bootstrapping runtime services
-let moduleGraphValidated = validateGraph(moduleRegistry, ["ApplicationModule"]) > 0
+let moduleGraphValidated = validateGraph(moduleRegistry, [ApplicationModule]) > 0
 
 # Configure application settings
 let settings = NimHttpApplicationSettings()

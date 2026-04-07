@@ -1,12 +1,20 @@
 import sets, tables
+import ../core/di
+import ../core/controller/base
 
 type
-  ModuleDescriptor* = object
+  ProviderToken* = object
     name*: string
-    imports*: seq[string]
-    providers*: seq[string]
-    exports*: seq[string]
-    controllers*: seq[string]
+
+  ControllerToken* = object
+    name*: string
+
+  ModuleDescriptor* = ref object
+    name*: string
+    imports*: seq[ModuleDescriptor]
+    providers*: seq[ProviderToken]
+    exports*: seq[ProviderToken]
+    controllers*: seq[ControllerToken]
 
   ModuleGraphState = object
     modules: Table[string, ModuleDescriptor]
@@ -18,10 +26,10 @@ type
 
 proc newModuleDescriptor*(
   name: string,
-  imports: openArray[string] = [],
-  providers: openArray[string] = [],
-  exports: openArray[string] = [],
-  controllers: openArray[string] = []
+  imports: openArray[ModuleDescriptor] = [],
+  providers: openArray[ProviderToken] = [],
+  exports: openArray[ProviderToken] = [],
+  controllers: openArray[ControllerToken] = []
 ): ModuleDescriptor =
   ModuleDescriptor(
     name: name,
@@ -31,27 +39,35 @@ proc newModuleDescriptor*(
     controllers: @controllers
   )
 
+converter toProviderToken*[T: SingletonObj](provider: typedesc[T]): ProviderToken =
+  ProviderToken(name: $provider)
+
+converter toControllerToken*[T: BaseController](controller: typedesc[T]): ControllerToken =
+  ControllerToken(name: $controller)
+
 proc validate*(descriptor: ModuleDescriptor) =
+  if descriptor.isNil:
+    raise newException(ValueError, "Module descriptor cannot be nil")
   if descriptor.name.len == 0:
     raise newException(ValueError, "Module name cannot be empty")
 
   var providerSet = initHashSet[string]()
   for provider in descriptor.providers:
-    if provider.len == 0:
+    if provider.name.len == 0:
       raise newException(ValueError, "Provider name cannot be empty in module " & descriptor.name)
-    providerSet.incl(provider)
+    providerSet.incl(provider.name)
 
   for controller in descriptor.controllers:
-    if controller.len == 0:
+    if controller.name.len == 0:
       raise newException(ValueError, "Controller name cannot be empty in module " & descriptor.name)
 
   for exportedProvider in descriptor.exports:
-    if exportedProvider.len == 0:
+    if exportedProvider.name.len == 0:
       raise newException(ValueError, "Exported provider name cannot be empty in module " & descriptor.name)
-    if exportedProvider notin providerSet:
+    if exportedProvider.name notin providerSet:
       raise newException(
         ValueError,
-        "Exported provider '" & exportedProvider & "' must also be declared in providers for module " & descriptor.name
+        "Exported provider '" & exportedProvider.name & "' must also be declared in providers for module " & descriptor.name
       )
 
 proc newModuleRegistry*(): ModuleRegistry =
@@ -78,7 +94,7 @@ proc visitModule(state: var ModuleGraphState, moduleName: string) =
 
   state.active.incl(moduleName)
   for importedModule in state.modules[moduleName].imports:
-    visitModule(state, importedModule)
+    visitModule(state, importedModule.name)
   state.active.excl(moduleName)
   state.visited.incl(moduleName)
 
@@ -97,14 +113,16 @@ proc validateState(state: var ModuleGraphState): int =
 
   for _, descriptor in state.modules:
     for importedModule in descriptor.imports:
-      if importedModule.len == 0:
+      if importedModule.isNil:
+        raise newException(ValueError, "Imported module cannot be nil in module " & descriptor.name)
+      if importedModule.name.len == 0:
         raise newException(ValueError, "Imported module name cannot be empty in module " & descriptor.name)
-      if importedModule == descriptor.name:
+      if importedModule.name == descriptor.name:
         raise newException(ValueError, "Module " & descriptor.name & " cannot import itself")
-      if not state.modules.hasKey(importedModule):
+      if not state.modules.hasKey(importedModule.name):
         raise newException(
           ValueError,
-          "Module " & descriptor.name & " imports unknown module " & importedModule
+          "Module " & descriptor.name & " imports unknown module " & importedModule.name
         )
 
   for _, descriptor in state.modules:
@@ -114,20 +132,22 @@ proc validateState(state: var ModuleGraphState): int =
 proc collectRegisteredModule(
   state: var ModuleGraphState,
   registry: ModuleRegistry,
-  moduleName: string
+  descriptor: ModuleDescriptor
 ) =
   ## Collects a root module and its transitive imports into the validation state.
   ## The traversal is depth-first and stops once a module has already been added.
-  if moduleName.len == 0:
+  if descriptor.isNil:
+    raise newException(ValueError, "Root module cannot be nil")
+  if descriptor.name.len == 0:
     raise newException(ValueError, "Root module name cannot be empty")
-  if state.modules.hasKey(moduleName):
+  if state.modules.hasKey(descriptor.name):
     return
-  if not registry.descriptors.hasKey(moduleName):
-    raise newException(ValueError, "Unknown registered module " & moduleName)
+  if not registry.descriptors.hasKey(descriptor.name):
+    raise newException(ValueError, "Unknown registered module " & descriptor.name)
 
-  let descriptor = registry.descriptors[moduleName]
-  state.modules[moduleName] = descriptor
-  for importedModule in descriptor.imports:
+  let registeredDescriptor = registry.descriptors[descriptor.name]
+  state.modules[registeredDescriptor.name] = registeredDescriptor
+  for importedModule in registeredDescriptor.imports:
     collectRegisteredModule(state, registry, importedModule)
 
 proc validateGraph*(descriptors: openArray[ModuleDescriptor]): int =
@@ -140,7 +160,7 @@ proc validateGraph*(descriptors: openArray[ModuleDescriptor]): int =
     state.modules[descriptor.name] = descriptor
   result = validateState(state)
 
-proc validateGraph*(registry: ModuleRegistry, rootModules: openArray[string]): int =
+proc validateGraph*(registry: ModuleRegistry, rootModules: openArray[ModuleDescriptor]): int =
   ## Validates the requested root modules and only the imports reachable from them.
   var state = newModuleGraphState()
   for rootModule in rootModules:
