@@ -85,6 +85,8 @@ proc newModuleGraphState(): ModuleGraphState =
   )
 
 proc validateState(state: var ModuleGraphState): int =
+  ## Validates the resolved module graph and returns the number of modules covered.
+  ## This checks descriptor integrity, missing imports, self-imports, and cycles.
   for _, descriptor in state.modules:
     descriptor.validate()
 
@@ -109,6 +111,8 @@ proc collectRegisteredModule(
   registry: ModuleRegistry,
   moduleName: string
 ) =
+  ## Collects a root module and its transitive imports into the validation state.
+  ## The traversal is depth-first and stops once a module has already been added.
   if moduleName.len == 0:
     raise newException(ValueError, "Root module name cannot be empty")
   if state.modules.hasKey(moduleName):
