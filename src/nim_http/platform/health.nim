@@ -48,10 +48,10 @@ proc readinessProbe*(service: string = "NimHTTP Framework"): HealthProbe =
   var checks: seq[HealthCheckStatus] = @[]
   var isReady = true
 
-  for _, readinessCheck in readinessChecks:
+  for _, readinessEntry in readinessChecks:
     let passed =
       try:
-        readinessCheck.check()
+        readinessEntry.check()
       except CatchableError:
         false
 
@@ -59,7 +59,7 @@ proc readinessProbe*(service: string = "NimHTTP Framework"): HealthProbe =
       isReady = false
 
     checks.add(HealthCheckStatus(
-      name: readinessCheck.name,
+      name: readinessEntry.name,
       status: if passed: "ready" else: "not_ready"
     ))
 

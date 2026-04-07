@@ -2,7 +2,7 @@ import ../../nim_http/http/controller
 import ../../nim_http/platform/config
 import ../../nim_http/platform/health
 
-Controller Health("health"):
+Controller HealthCheck("health"):
 
   [GET("live")]
   proc live() =
