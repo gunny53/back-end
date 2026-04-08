@@ -64,3 +64,30 @@ proc process*(request: Request): Future[void] {.async, gcsafe.} =
     await route.resolve(request)
   else:
     raise METHOD_NOT_ALLOWED("Method " & $request.reqMethod & " not allowed for path: " & request.url.path)
+
+type RouteInfo* = object
+  ## Snapshot of a single registered route, used for startup logging and
+  ## route-count validation.
+  httpMethod*: string
+  path*:       string
+
+proc collectRoutes(node: RouteNode, results: var seq[RouteInfo]) =
+  for met, detail in node.methods:
+    results.add(RouteInfo(httpMethod: $met, path: detail.pattern.raw))
+  for _, child in node.children:
+    collectRoutes(child, results)
+  if not node.paramChild.isNil:
+    collectRoutes(node.paramChild, results)
+
+proc listRoutes*(): seq[RouteInfo] =
+  ## Returns information about every route registered in the global trie.
+  ## Useful for startup logging and conflict audits.
+  result = @[]
+  collectRoutes(routeRoot, result)
+
+proc routeCount*(): int =
+  ## Returns the total number of registered routes across all HTTP methods.
+  ## Can be used at startup to assert that the expected number of routes were
+  ## loaded from all controllers before the server begins accepting traffic.
+  let routes = listRoutes()
+  result = routes.len

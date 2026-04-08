@@ -22,14 +22,14 @@ Xây dựng một framework Nim có:
 
 ## 2) Kiến trúc đích (Target Architecture)
 
-## 2.1 Layer model chuẩn
+### 2.1 Layer model chuẩn
 1. **Kernel**: module graph, DI scopes, lifecycle.
 2. **HTTP Runtime**: transport adapter, request/response abstraction, router engine.
 3. **Pipeline**: middleware, guard, validation pipes, interceptors, exception filters.
 4. **Platform**: config profiles, logging, metrics, tracing, health probes.
 5. **Tooling**: CLI, scaffold, testing profile, benchmark profile, release automation.
 
-## 2.2 Contract module kiểu enterprise
+### 2.2 Contract module kiểu enterprise
 Mỗi module có cấu trúc thống nhất:
 - `imports`
 - `providers`
@@ -42,7 +42,7 @@ Rules bắt buộc:
 - Scope provider rõ ràng: `singleton`, `request`, `transient`.
 - Có API override provider cho unit/integration tests.
 
-## 2.3 Canonical request pipeline
+### 2.3 Canonical request pipeline
 `Request -> Middleware -> Guard -> Validation/Pipe -> Interceptor(before) -> Handler -> Interceptor(after) -> ExceptionFilter -> Response`
 
 Nguyên tắc:
@@ -54,7 +54,7 @@ Nguyên tắc:
 
 ## 3) Roadmap triển khai theo giai đoạn
 
-## Phase A (Tuần 0-6): Baseline & API Governance
+### Phase A (Tuần 0-6): Baseline & API Governance
 
 ### Deliverables
 - Freeze public API cho `core/`, `kernel/`, `http/`, `platform/`, `pipeline/`.
@@ -66,7 +66,7 @@ Nguyên tắc:
 - Có API inventory + deprecation map.
 - CI xuất artifact benchmark cho mọi PR vào nhánh chính.
 
-## Phase B (Tuần 6-14): Runtime Performance Refactor
+### Phase B (Tuần 6-14): Runtime Performance Refactor
 
 ### Deliverables
 - Router v2: trie matcher + precompiled param extraction.
@@ -78,7 +78,7 @@ Nguyên tắc:
 - Throughput tăng >=2x ở hello/json.
 - Alloc/request giảm >=40% trên benchmark CRUD.
 
-## Phase C (Tuần 14-22): Production Hardening
+### Phase C (Tuần 14-22): Production Hardening
 
 ### Deliverables
 - OpenTelemetry tracing + propagation theo request context.
@@ -90,7 +90,7 @@ Nguyên tắc:
 - Pass toàn bộ production checklist.
 - Có runbook vận hành và dashboard mẫu.
 
-## Phase D (Tuần 22-36): Ecosystem & v1.0 GA
+### Phase D (Tuần 22-36): Ecosystem & v1.0 GA
 
 ### Deliverables
 - CLI đầy đủ: `new`, `generate`, `test`, `bench`, `release`.
@@ -105,7 +105,7 @@ Nguyên tắc:
 
 ## 4) Plan refactor bám sát cấu trúc hiện tại
 
-## 4.1 `src/nim_http/core/route/*`
+### 4.1 `src/nim_http/core/route/*`
 
 ### Vấn đề
 - Route matching còn nặng dynamic string scan.
@@ -119,7 +119,7 @@ Nguyên tắc:
 - Lookup O(depth), giảm linear scan.
 - Giảm parsing/alloc trong hot path.
 
-## 4.2 `src/nim_http/core/middleware.nim` + `src/nim_http/pipeline/*`
+### 4.2 `src/nim_http/core/middleware.nim` + `src/nim_http/pipeline/*`
 
 ### Vấn đề
 - Merge middleware runtime mỗi request.
@@ -133,7 +133,7 @@ Nguyên tắc:
 - Giảm alloc/request.
 - Dễ đo latency theo từng stage pipeline.
 
-## 4.3 `src/nim_http/core/di.nim` + `src/nim_http/kernel/di.nim`
+### 4.3 `src/nim_http/core/di.nim` + `src/nim_http/kernel/di.nim`
 
 ### Vấn đề
 - String-key lookup + cast runtime gây overhead.
@@ -147,7 +147,7 @@ Nguyên tắc:
 - Lookup nhanh hơn.
 - Error semantics rõ, dễ test hơn.
 
-## 4.4 `src/nim_http/core/request.nim` + `src/nim_http/http/request.nim`
+### 4.4 `src/nim_http/core/request.nim` + `src/nim_http/http/request.nim`
 
 ### Vấn đề
 - Chưa có memory strategy nhất quán cho request scope.
@@ -161,14 +161,14 @@ Nguyên tắc:
 - Giảm pressure cho ARC/ORC.
 - Tăng locality và giảm tail latency.
 
-## 4.5 `src/nim_http/platform/*`
+### 4.5 `src/nim_http/platform/*`
 
 ### Refactor
 - Config profiles: `dev/test/staging/prod` + precedence rõ ràng.
 - Structured logging + correlation/request ID.
 - Tracing/metrics provider abstraction (cắm OTel/Prometheus dễ dàng).
 
-## 4.6 `src/libs/*` và `src/apps/*`
+### 4.6 `src/libs/*` và `src/apps/*`
 
 ### Refactor
 - Tách app-level modules khỏi framework internals bằng clear interface.
@@ -179,26 +179,26 @@ Nguyên tắc:
 
 ## 5) Best-practice process để đạt “nhanh nhất” nhưng bền vững
 
-## 5.1 Performance governance
+### 5.1 Performance governance
 - Mọi thay đổi hot path phải có perf hypothesis + benchmark evidence.
 - Perf dashboard theo commit; cảnh báo regression tự động trong CI.
 - Không tối ưu cảm tính; chỉ tối ưu điểm nghẽn đo được.
 
-## 5.2 RFC workflow
+### 5.2 RFC workflow
 - RFC ngắn gọn: problem, constraints, design, perf impact, migration.
 - Review design trước code.
 - Rollout bằng strangler pattern/feature flags cho thay đổi lớn.
 
-## 5.3 Quality gates
+### 5.3 Quality gates
 - Unit tests: router matcher, DI resolver, pipeline planner.
 - Integration tests: module graph + scope/lifecycle behavior.
 - E2E tests: auth/error boundary/observability/lifecycle.
 - Compatibility tests: deprecated API + migration path.
 
-## 5.4 Release discipline
+### 5.4 Release discipline
 - SemVer nghiêm ngặt.
 - Deprecation window tối thiểu 2 bản minor.
-- MIGRATION_GUIDE bắt buộc cho mọi breaking/behavioral change.
+- `docs/MIGRATION_GUIDE.md` bắt buộc cho mọi breaking/behavioral change.
 - Nightly + RC trước GA để giảm rủi ro production.
 
 ---

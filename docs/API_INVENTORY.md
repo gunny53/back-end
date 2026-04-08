@@ -47,6 +47,8 @@
 | `dependencyContainer` | var | experimental | Internal; do not reference directly |
 | `register[T]` | proc | stable | Register a provider with scope + factory |
 | `inject[T]` | proc | stable | Resolve a provider by type |
+| `isRegistered[T]` | proc | stable | Returns true when a provider for T has been registered |
+| `resolveAll` | proc | stable | Eagerly resolves all Singleton providers at startup |
 | `class` (body variant) | macro | stable | Declare and auto-register a service class |
 | `class` (no-body variant) | macro | stable | Declare a service class without methods |
 | `singleton` | pragma | stable | Marks a type as singleton-scoped |
@@ -141,6 +143,11 @@ Delegates entirely to `asynchttpserver.Request`. No NimHTTP-specific symbols at 
 | `routeRoot` | var | experimental | Internal thread-local trie root; do not access directly |
 | `addRoute` | proc | stable | Low-level route registration |
 | `process` | proc | stable | Core request dispatch — called by the application loop |
+| `RouteInfo` | type | stable | Snapshot of a single registered route |
+| `RouteInfo.httpMethod` | field | stable | |
+| `RouteInfo.path` | field | stable | |
+| `listRoutes` | proc | stable | Returns all registered routes; useful for startup logging |
+| `routeCount` | proc | stable | Returns the total number of registered routes |
 
 ---
 
@@ -260,6 +267,58 @@ Delegates entirely to `asynchttpserver.Request`. No NimHTTP-specific symbols at 
 | `createStarterProject` | proc | experimental | |
 | `generateResource` | proc | experimental | |
 | `runCli` | proc | experimental | Entry point for the `nimhttp` binary |
+
+---
+
+## `nim_http/http/query` (re-exports `core/query`) — Phase B
+
+| Symbol | Kind | Tier | Notes |
+|--------|------|------|-------|
+| `parseQueryString` | proc | stable | Parses a query string into a `Table[string, string]`; percent-decodes keys and values |
+| `queryFromUrl` | proc | stable | Extracts and parses the query component of a full URL |
+
+---
+
+## `nim_http/platform/tracing` — Phase C
+
+| Symbol | Kind | Tier | Notes |
+|--------|------|------|-------|
+| `TraceParentHeader` | const | stable | `"traceparent"` |
+| `TraceStateHeader` | const | stable | `"tracestate"` |
+| `CorrelationIdHeader` | const | stable | `"x-correlation-id"` |
+| `TraceContext` | type | stable | Immutable trace state for a single request |
+| `TraceContext.traceId` | field | stable | 32 lowercase hex chars (128-bit) |
+| `TraceContext.spanId` | field | stable | 16 lowercase hex chars (64-bit) |
+| `TraceContext.parentSpanId` | field | stable | 16 hex chars or empty for root |
+| `TraceContext.sampled` | field | stable | |
+| `TraceContext.correlationId` | field | stable | |
+| `newTraceId` | proc | stable | Generates a random 128-bit trace ID |
+| `newSpanId` | proc | stable | Generates a random 64-bit span ID |
+| `toTraceParent` | proc | stable | Serialises context to W3C `traceparent` header value |
+| `extractTraceContext` (headers) | proc | stable | Extracts or creates a `TraceContext` from `HttpHeaders` |
+| `extractTraceContext` (request) | proc | stable | Convenience overload for `Request` |
+| `injectTraceHeaders` | proc | stable | Injects W3C trace headers into an outgoing `HttpHeaders` |
+
+---
+
+## `nim_http/platform/metrics` — Phase C
+
+| Symbol | Kind | Tier | Notes |
+|--------|------|------|-------|
+| `HistogramBuckets` | type | stable | `seq[float]` of upper-bound values in milliseconds |
+| `DefaultBuckets` | const | stable | 11 standard latency tiers from 1 ms to 5 000 ms |
+| `MetricsRegistry` | type | stable | Holds all counters, error counts, and histogram buckets |
+| `newMetricsRegistry` | proc | stable | Creates an empty registry with given bucket bounds |
+| `globalMetrics` | var | experimental | Process-global thread-local registry |
+| `initGlobalMetrics` | proc | stable | Initialises global registry; safe to call multiple times |
+| `getMetrics` | proc | stable | Returns global registry, initialising on first use |
+| `resetMetrics` | proc | stable | Resets all counters to zero (intended for tests) |
+| `recordRequest` (registry) | proc | stable | Records one request into the given registry |
+| `recordRequest` (global) | proc | stable | Convenience overload using global registry |
+| `totalRequests` | proc | stable | |
+| `totalErrors` | proc | stable | |
+| `exportPrometheus` (registry) | proc | stable | Exports Prometheus text format v0.0.4 |
+| `exportPrometheus` (global) | proc | stable | Convenience overload using global registry |
 
 ---
 

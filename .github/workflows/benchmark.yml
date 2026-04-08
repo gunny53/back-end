@@ -45,6 +45,10 @@ jobs:
         id: bench_hello
         run: nim c -r -d:release --hints:off benchmarks/bench_hello.nim | tee bench_hello.txt
 
+      - name: Run query-string benchmark
+        id: bench_query
+        run: nim c -r -d:release --hints:off benchmarks/bench_query.nim | tee bench_query.txt
+
       - name: Combine results
         run: |
           echo "## Benchmark Results" > benchmark_summary.md
@@ -73,6 +77,11 @@ jobs:
           echo '```' >> benchmark_summary.md
           cat bench_hello.txt >> benchmark_summary.md
           echo '```' >> benchmark_summary.md
+          echo "" >> benchmark_summary.md
+          echo "### Query string" >> benchmark_summary.md
+          echo '```' >> benchmark_summary.md
+          cat bench_query.txt >> benchmark_summary.md
+          echo '```' >> benchmark_summary.md
 
       - name: Upload benchmark artifact
         uses: actions/upload-artifact@v4
@@ -84,6 +93,7 @@ jobs:
             bench_pipeline.txt
             bench_di.txt
             bench_hello.txt
+            bench_query.txt
             benchmark_summary.md
           retention-days: 90
 
