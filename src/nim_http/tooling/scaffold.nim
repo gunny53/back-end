@@ -616,7 +616,7 @@ proc runBenchmarks*(root: string = getCurrentDir()): int =
 
 proc normalizeSemVer(version: string): string =
   let candidate =
-    if version.len > 0 and version[0] == 'v':
+    if version.startsWith('v'):
       version[1 .. ^1]
     else:
       version

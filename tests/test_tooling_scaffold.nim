@@ -103,8 +103,13 @@ suite "phase d scaffolding":
       removeDirIfExists(baseDir)
 
   test "release preparation rejects non semver versions":
-    expect(ValueError):
+    var message = ""
+    try:
       discard prepareReleaseArtifacts("v0.3", getCurrentDir())
+      fail()
+    except ValueError as err:
+      message = err.msg
+    check message.contains("exactly 3 numeric parts")
 
   test "release preparation rejects invalid semver variants":
     expect(ValueError):
