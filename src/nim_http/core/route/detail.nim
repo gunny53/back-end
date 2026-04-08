@@ -36,22 +36,23 @@ proc resolve*(this: RouteDetail, request: Request): Future[void] {.async, gcsafe
   await this.delegate.instance.processRequest(request).invoke(this.delegate.handler)
 
 proc process*(request: Request): Future[void] {.async, gcsafe.} =
-  let segments   = request.url.path.strip(chars = {'/'}).split("/")
-  var current    = routeRoot
-  var params     = newTable[string, string]()
-  var paramIndex = 0
+  let segments = request.url.path.strip(chars = {'/'}).split("/")
+  var current = routeRoot
+  var params = newTable[string, string]()
+  var paramValues: seq[string] = @[]
   for seg in segments:
     if current.children.hasKey(seg):
       current = current.children[seg]
     elif not current.paramChild.isNil:
       current = current.paramChild
-      if paramIndex < current.methods.getOrDefault(request.reqMethod).pattern.paramSegments.len:
-        params[current.methods[request.reqMethod].pattern.paramSegments[paramIndex]] = seg
-        paramIndex += 1
+      paramValues.add(seg)
     else:
       raise NOT_FOUND("No route found for path: " & request.url.path)
   if current.methods.hasKey(request.reqMethod):
     let route = current.methods[request.reqMethod]
+    for idx, name in route.pattern.paramSegments:
+      if idx < paramValues.len:
+        params[name] = paramValues[idx]
     route.delegate.instance.params = params
     await route.resolve(request)
   else:

@@ -22,6 +22,7 @@ type
     routes: Table[string, seq[MiddlewareFunction]]
     compiledPlans: seq[PipelinePlan]
     pathCache: Table[string, seq[MiddlewareFunction]]
+    pathCacheOrder: seq[string]
     needsRecompile: bool
 
 proc newMiddlewareConsumer*(): MiddlewareConsumer =
@@ -31,6 +32,7 @@ proc newMiddlewareConsumer*(): MiddlewareConsumer =
     routes: initTable[string, seq[MiddlewareFunction]](),
     compiledPlans: @[],
     pathCache: initTable[string, seq[MiddlewareFunction]](),
+    pathCacheOrder: @[],
     needsRecompile: true
   )
 
@@ -38,6 +40,7 @@ proc markDirty(consumer: MiddlewareConsumer) =
   consumer.needsRecompile = true
   consumer.compiledPlans.setLen(0)
   consumer.pathCache.clear()
+  consumer.pathCacheOrder.setLen(0)
 
 proc apply*(consumer: MiddlewareConsumer, middleware: MiddlewareFunction) =
   ## Applies middleware to all routes
@@ -64,10 +67,34 @@ proc compilePipelinePlans*(consumer: MiddlewareConsumer) =
 
   consumer.compiledPlans = plans
   consumer.pathCache.clear()
+  consumer.pathCacheOrder.setLen(0)
   consumer.needsRecompile = false
+
+proc touchPathCache(consumer: MiddlewareConsumer, path: string) =
+  let idx = consumer.pathCacheOrder.find(path)
+  if idx >= 0:
+    consumer.pathCacheOrder.delete(idx)
+  consumer.pathCacheOrder.add(path)
+
+proc cachePlan(
+  consumer: MiddlewareConsumer,
+  path: string,
+  chain: seq[MiddlewareFunction]
+) =
+  if consumer.pathCache.hasKey(path):
+    consumer.pathCache[path] = chain
+    consumer.touchPathCache(path)
+  else:
+    if consumer.pathCacheOrder.len >= maxPathCacheEntries:
+      let oldestPath = consumer.pathCacheOrder[0]
+      consumer.pathCache.del(oldestPath)
+      consumer.pathCacheOrder.delete(0)
+    consumer.pathCache[path] = chain
+    consumer.pathCacheOrder.add(path)
 
 proc resolvePlan(consumer: MiddlewareConsumer, path: string): seq[MiddlewareFunction] =
   if consumer.pathCache.hasKey(path):
+    consumer.touchPathCache(path)
     return consumer.pathCache[path]
 
   var chain: seq[MiddlewareFunction] = @[]
@@ -75,9 +102,7 @@ proc resolvePlan(consumer: MiddlewareConsumer, path: string): seq[MiddlewareFunc
     if plan.prefix.len == 0 or path.startsWith(plan.prefix):
       chain.add(plan.chain)
 
-  if consumer.pathCache.len >= maxPathCacheEntries:
-    consumer.pathCache.clear()
-  consumer.pathCache[path] = chain
+  consumer.cachePlan(path, chain)
   chain
 
 proc execute*(consumer: MiddlewareConsumer, req: Request): Future[void] {.async.} =
