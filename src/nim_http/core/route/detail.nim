@@ -65,6 +65,25 @@ proc process*(request: Request): Future[void] {.async, gcsafe.} =
   else:
     raise METHOD_NOT_ALLOWED("Method " & $request.reqMethod & " not allowed for path: " & request.url.path)
 
+proc findRouteDetail*(rawPath: string, met: HttpMethod): RouteDetail =
+  ## Looks up a ``RouteDetail`` by its raw path template and HTTP method.
+  ## Returns ``nil`` when the route does not exist in the trie.
+  ## Used by the Phase-C dispatcher to resolve handlers at startup.
+  let segments = splitPathSegments(rawPath)
+  var current  = routeRoot
+  for seg in segments:
+    if seg.startsWith(":"):
+      if current.paramChild.isNil:
+        return nil
+      current = current.paramChild
+    else:
+      if not current.children.hasKey(seg):
+        return nil
+      current = current.children[seg]
+  if current.methods.hasKey(met):
+    return current.methods[met]
+  return nil
+
 type RouteInfo* = object
   ## Snapshot of a single registered route, used for startup logging and
   ## route-count validation.
