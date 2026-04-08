@@ -81,16 +81,12 @@ proc cachePlan(
   path: string,
   chain: seq[MiddlewareFunction]
 ) =
-  if consumer.pathCache.hasKey(path):
-    consumer.pathCache[path] = chain
-    consumer.touchPathCache(path)
-  else:
-    if consumer.pathCacheOrder.len >= maxPathCacheEntries:
-      let oldestPath = consumer.pathCacheOrder[0]
-      consumer.pathCache.del(oldestPath)
-      consumer.pathCacheOrder.delete(0)
-    consumer.pathCache[path] = chain
-    consumer.pathCacheOrder.add(path)
+  if consumer.pathCacheOrder.len >= maxPathCacheEntries:
+    let oldestPath = consumer.pathCacheOrder[0]
+    consumer.pathCache.del(oldestPath)
+    consumer.pathCacheOrder.delete(0)
+  consumer.pathCache[path] = chain
+  consumer.pathCacheOrder.add(path)
 
 proc resolvePlan(consumer: MiddlewareConsumer, path: string): seq[MiddlewareFunction] =
   if consumer.pathCache.hasKey(path):
