@@ -4,6 +4,7 @@
 import asyncdispatch, asynchttpserver, tables, times, strutils, algorithm, sequtils
 
 const maxPathCacheEntries = 256
+## Keep the cache bounded on high-cardinality paths while preserving hot-path reuse.
 
 type
   NextFunction* = proc(): Future[void] {.gcsafe, closure.}
