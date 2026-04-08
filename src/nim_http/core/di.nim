@@ -106,6 +106,27 @@ proc inject*[T: SingletonObj](t: typedesc[T]): T {.gcsafe.} =
   
   raise newException(ValueError, "Provider not found: " & key)
 
+proc isRegistered*[T: SingletonObj](t: typedesc[T]): bool =
+  ## Returns true when a provider for type ``T`` has been registered in the DI
+  ## container (either through the legacy ``singletonRegistry`` or the typed
+  ## ``dependencyContainer``).  Use this at startup to assert that all expected
+  ## providers were wired before the server begins serving requests.
+  initRegistry()
+  let key = $t
+  singletonRegistry.hasKey(key) or dependencyContainer.providers.hasKey(key)
+
+proc resolveAll*() =
+  ## Eagerly resolves every registered Singleton provider, populating the
+  ## instance cache before any request arrives.  Calling this once at startup
+  ## means first-request latency is not penalised by lazy DI resolution.
+  ## Transient providers are intentionally skipped — they produce a fresh
+  ## instance on each ``inject`` call by design.
+  initRegistry()
+  for key, metadata in dependencyContainer.providers.mpairs:
+    if metadata.scope == Singleton and metadata.instance.isNil and not metadata.factory.isNil:
+      metadata.instance = metadata.factory()
+      singletonRegistry[key] = metadata.instance
+
 macro class*(declareClass: untyped, body: untyped): untyped =
   result        = newStmtList()
   let rawClass  = declareClass[1]

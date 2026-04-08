@@ -15,13 +15,26 @@ type
 const usageText* = """nimhttp - NimHTTP Phase D CLI
 
 Usage:
-  nimhttp new <rest-api|auth-jwt|microservice> <destination>
+  nimhttp new <rest-api|auth-jwt|microservice|modular-monolith> <destination>
   nimhttp generate module <name> [root]
   nimhttp generate resource <name> [root]
   nimhttp test [root]
   nimhttp bench [root]
+  nimhttp release <version> [root]
   nimhttp help
 """
+
+const releaseRequiredFiles = [
+  "README.md",
+  "CHANGELOG.md",
+  "nim_http.nimble",
+  "docs/API_INVENTORY.md",
+  "docs/COMPATIBILITY_POLICY.md",
+  "docs/COMPATIBILITY_MATRIX.md",
+  "docs/LTS_POLICY.md",
+  "docs/MIGRATION_GUIDE.md",
+  ".github/workflows/release.yml"
+]
 
 const starterNimbleTemplate = """version       = \"0.1.0\"
 author        = \"NimHTTP CLI\"
@@ -519,6 +532,17 @@ proc microserviceStarterFiles(identity: ProjectIdentity): seq[ScaffoldFile] =
   result.add(scaffoldFile("src/apps/status/module.nim", microserviceModuleTemplate))
   result.add(scaffoldFile("src/apps/module.nim", microserviceAppModuleTemplate))
 
+proc modularMonolithStarterFiles(identity: ProjectIdentity): seq[ScaffoldFile] =
+  ## Phase D starter for a modular monolith.
+  ## Keep it close to the REST starter because that already wires a feature
+  ## module + health module under a single application module boundary.
+  ## The alias is intentional for the Phase D surface: `modular-monolith` is
+  ## the stable CLI name, and today it maps to the REST starter because that
+  ## starter already models a single application composed from feature modules.
+  ## If the template later diverges, that should happen behind this existing
+  ## command name rather than introducing a new user-facing starter keyword.
+  restStarterFiles(identity)
+
 proc createStarterProject*(starter: string; destination: string) =
   let identity = projectIdentity(destination)
   let starterKey = starter.toLowerAscii()
@@ -527,6 +551,7 @@ proc createStarterProject*(starter: string; destination: string) =
     of "rest-api": restStarterFiles(identity)
     of "auth-jwt": authStarterFiles(identity)
     of "microservice": microserviceStarterFiles(identity)
+    of "modular-monolith": modularMonolithStarterFiles(identity)
     else:
       raise newException(ValueError, "Unsupported starter: " & starter)
 
@@ -589,6 +614,77 @@ proc runBenchmarks*(root: string = getCurrentDir()): int =
   let benchmarkTarget = findBenchmarkCandidate(root)
   runCommand("nim c -r " & benchmarkTarget, root)
 
+proc normalizeSemVer(version: string): string =
+  let candidate =
+    if version.startsWith('v'):
+      version[1 .. ^1]
+    else:
+      version
+
+  let parts = candidate.split('.')
+  if parts.len != 3:
+    raise newException(ValueError, "Version must have exactly 3 numeric parts separated by dots")
+  for part in parts:
+    if part.len == 0:
+      raise newException(ValueError, "Version parts cannot be empty")
+    if part.len > 1 and part[0] == '0':
+      raise newException(ValueError, "Version part \"" & part & "\" must not contain leading zeroes")
+    for ch in part:
+      if ch notin {'0' .. '9'}:
+        raise newException(ValueError, "Version parts must contain only digits")
+  candidate
+
+proc requireExistingPaths(root: string; relativePaths: openArray[string]) =
+  for relativePath in relativePaths:
+    let fullPath = root / relativePath
+    if not fileExists(fullPath):
+      raise newException(IOError, "Missing required release file: " & relativePath)
+
+proc copyBundlePath(root: string; bundleDir: string; relativePath: string) =
+  let sourcePath = root / relativePath
+  let targetPath = bundleDir / relativePath
+  let targetDir = parentDir(targetPath)
+  if targetDir.len > 0 and not dirExists(targetDir):
+    createDir(targetDir)
+  copyFile(sourcePath, targetPath)
+
+proc releaseManifest(version: string; includedPaths: seq[string]): string =
+  result = "version=" & version & "\n"
+  result.add("artifacts_dir=dist/release-" & version & "\n")
+  result.add("included_files=\n")
+  for relativePath in includedPaths:
+    result.add("- " & relativePath & "\n")
+
+proc prepareReleaseArtifacts*(version: string; root: string = getCurrentDir()): string =
+  ## Validates the Phase D release inputs and stages a release bundle under
+  ## `dist/release-<version>`. The command is intentionally file-system only:
+  ## CI can archive or publish this staged bundle without re-implementing the
+  ## project-specific release checklist.
+  ##
+  ## Returns the absolute path to the staged release bundle directory.
+  let normalizedVersion = normalizeSemVer(version)
+
+  requireExistingPaths(root, releaseRequiredFiles)
+
+  let distDir = root / "dist"
+  if not dirExists(distDir):
+    createDir(distDir)
+
+  result = distDir / ("release-" & normalizedVersion)
+  if dirExists(result):
+    removeDir(result)
+  createDir(result)
+
+  for relativePath in releaseRequiredFiles:
+    copyBundlePath(root, result, relativePath)
+
+  writeFile(result / "release_manifest.txt", releaseManifest(normalizedVersion, @releaseRequiredFiles))
+
+proc runRelease*(version: string; root: string = getCurrentDir()): int =
+  let bundleDir = prepareReleaseArtifacts(version, root)
+  stdout.writeLine("Release bundle prepared at " & bundleDir)
+  0
+
 proc integrationHint(kind: string; name: string) =
   let moduleName = toPascalCase(name) & "Module"
   stdout.writeLine(kind & " generated. Register " & moduleName & " in src/apps/module.nim to activate it.")
@@ -602,7 +698,7 @@ proc runCli*(args: seq[string]): int =
     case args[0].toLowerAscii()
     of "new":
       if args.len < 3:
-        raise newException(ValueError, "Usage: nimhttp new <rest-api|auth-jwt|microservice> <destination>")
+        raise newException(ValueError, "Usage: nimhttp new <rest-api|auth-jwt|microservice|modular-monolith> <destination>")
       createStarterProject(args[1], args[2])
       stdout.writeLine("Starter created at " & args[2])
       return 0
@@ -627,6 +723,11 @@ proc runCli*(args: seq[string]): int =
     of "bench":
       let root = if args.len >= 2: args[1] else: getCurrentDir()
       return runBenchmarks(root)
+    of "release":
+      if args.len < 2:
+        raise newException(ValueError, "Usage: nimhttp release <version> [root]")
+      let root = if args.len >= 3: args[2] else: getCurrentDir()
+      return runRelease(args[1], root)
     else:
       raise newException(ValueError, "Unknown command: " & args[0])
   except CatchableError as exc:

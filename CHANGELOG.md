@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased] - 2025-12-26
 
 ### Added
+- **Phase D CLI & release tooling**
+  - `nimhttp release <version> [root]` stages a release bundle under `dist/release-<version>`
+  - `nimhttp new modular-monolith <destination>` starter alias for modular monolith projects
+  - `docs/COMPATIBILITY_MATRIX.md` and `docs/LTS_POLICY.md`
+  - `.github/workflows/release.yml` builds a release bundle on tags / workflow dispatch
+
 - **Configuration Management Module** (`src/nim_http/core/config.nim`)
   - Environment variable support
   - `.env` file loading

@@ -51,6 +51,7 @@ docker run -p 8888:8888 nimhttp
 ```bash
 # Generate a starter project
 nimhttp new rest-api ./examples/rest-api-starter
+nimhttp new modular-monolith ./examples/modular-monolith-starter
 
 # Generate application code inside an existing repo
 nimhttp generate module Billing .
@@ -59,6 +60,7 @@ nimhttp generate resource UserProfile .
 # Run the standard project commands
 nimhttp test
 nimhttp bench
+nimhttp release 0.3.0
 ```
 
 ## Project Structure
