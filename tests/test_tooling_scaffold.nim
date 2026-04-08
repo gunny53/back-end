@@ -1,4 +1,4 @@
-import os, unittest
+import os, strutils, unittest
 
 import nim_http/tooling/scaffold
 
@@ -41,7 +41,7 @@ suite "phase d scaffolding":
       removeDirIfExists(baseDir)
 
   test "modular monolith starter is supported":
-    let baseDir = getCurrentDir() / ".tmp_modular_monolith_starter"
+    let baseDir = getCurrentDir() / "tmp_modular_monolith_starter"
     removeDirIfExists(baseDir)
     try:
       createStarterProject("modular-monolith", baseDir)
@@ -73,11 +73,14 @@ suite "phase d scaffolding":
       writeFile(baseDir / ".github" / "workflows" / "release.yml", "name: Release\n")
 
       let bundleDir = prepareReleaseArtifacts("0.3.0", baseDir)
+      let manifest = readFile(bundleDir / "release_manifest.txt")
       check dirExists(bundleDir)
       check fileExists(bundleDir / "release_manifest.txt")
       check fileExists(bundleDir / "README.md")
       check fileExists(bundleDir / "docs" / "COMPATIBILITY_MATRIX.md")
       check fileExists(bundleDir / ".github" / "workflows" / "release.yml")
+      check manifest.contains("version=0.3.0")
+      check manifest.contains("- docs/COMPATIBILITY_MATRIX.md")
     finally:
       removeDirIfExists(baseDir)
 
@@ -101,9 +104,11 @@ suite "phase d scaffolding":
       writeFile(baseDir / ".github" / "workflows" / "release.yml", "name: Release\n")
 
       let bundleDir = prepareReleaseArtifacts("v0.3.0", baseDir)
+      let manifest = readFile(bundleDir / "release_manifest.txt")
       check dirExists(bundleDir)
       check fileExists(bundleDir / "release_manifest.txt")
       check dirExists(baseDir / "dist" / "release-0.3.0")
+      check manifest.contains("version=0.3.0")
     finally:
       removeDirIfExists(baseDir)
 

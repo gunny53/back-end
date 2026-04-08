@@ -614,7 +614,7 @@ proc normalizeSemVer(version: string): string =
     if part.len == 0:
       raise newException(ValueError, "Version parts cannot be empty")
     if part.len > 1 and part[0] == '0':
-      raise newException(ValueError, "Semver parts must not contain leading zeroes")
+      raise newException(ValueError, "SemVer parts must not contain leading zeroes")
     for ch in part:
       if ch notin {'0' .. '9'}:
         raise newException(ValueError, "Version parts must contain only digits")
