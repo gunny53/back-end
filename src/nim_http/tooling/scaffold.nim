@@ -597,17 +597,25 @@ proc runBenchmarks*(root: string = getCurrentDir()): int =
   let benchmarkTarget = findBenchmarkCandidate(root)
   runCommand("nim c -r " & benchmarkTarget, root)
 
-proc isSemVer(version: string): bool =
-  let parts = version.split('.')
+proc normalizeSemVer(version: string): string =
+  let candidate =
+    if version.len > 0 and version[0] == 'v':
+      version[1 .. ^1]
+    else:
+      version
+
+  let parts = candidate.split('.')
   if parts.len != 3:
-    return false
+    raise newException(ValueError, "Version must use semver format x.y.z")
   for part in parts:
     if part.len == 0:
-      return false
+      raise newException(ValueError, "Version must use semver format x.y.z")
+    if part.len > 1 and part[0] == '0':
+      raise newException(ValueError, "Semver parts must not contain leading zeroes")
     for ch in part:
       if ch notin {'0' .. '9'}:
-        return false
-  true
+        raise newException(ValueError, "Version must use semver format x.y.z")
+  candidate
 
 proc requireExistingPaths(root: string; relativePaths: openArray[string]) =
   for relativePath in relativePaths:
@@ -635,8 +643,7 @@ proc prepareReleaseArtifacts*(version: string; root: string = getCurrentDir()): 
   ## `dist/release-<version>`. The command is intentionally file-system only:
   ## CI can archive or publish this staged bundle without re-implementing the
   ## project-specific release checklist.
-  if not isSemVer(version):
-    raise newException(ValueError, "Version must use semver format x.y.z")
+  let normalizedVersion = normalizeSemVer(version)
 
   let requiredFiles = @[
     "README.md",
@@ -655,7 +662,7 @@ proc prepareReleaseArtifacts*(version: string; root: string = getCurrentDir()): 
   if not dirExists(distDir):
     createDir(distDir)
 
-  result = distDir / ("release-" & version)
+  result = distDir / ("release-" & normalizedVersion)
   if dirExists(result):
     removeDir(result)
   createDir(result)
@@ -663,7 +670,7 @@ proc prepareReleaseArtifacts*(version: string; root: string = getCurrentDir()): 
   for relativePath in requiredFiles:
     copyBundlePath(root, result, relativePath)
 
-  writeFile(result / "release_manifest.txt", releaseManifest(version, requiredFiles))
+  writeFile(result / "release_manifest.txt", releaseManifest(normalizedVersion, requiredFiles))
 
 proc runRelease*(version: string; root: string = getCurrentDir()): int =
   let bundleDir = prepareReleaseArtifacts(version, root)

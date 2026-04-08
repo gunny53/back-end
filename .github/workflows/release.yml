@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'SemVer version to bundle (for example 0.3.0)'
+        description: 'SemVer version to bundle (for example 0.3.0 or v0.3.0)'
         required: true
         type: string
 

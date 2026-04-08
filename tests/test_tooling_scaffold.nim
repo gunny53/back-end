@@ -81,6 +81,40 @@ suite "phase d scaffolding":
     finally:
       removeDirIfExists(baseDir)
 
+  test "release preparation accepts optional v prefix":
+    let baseDir = getCurrentDir() / ".tmp-release-bundle-vprefix"
+    removeDirIfExists(baseDir)
+    try:
+      createDir(baseDir)
+      createDir(baseDir / "docs")
+      createDir(baseDir / ".github")
+      createDir(baseDir / ".github" / "workflows")
+
+      writeFile(baseDir / "README.md", "# Demo\n")
+      writeFile(baseDir / "CHANGELOG.md", "# Changelog\n")
+      writeFile(baseDir / "nim_http.nimble", "version = \"0.1.0\"\n")
+      writeFile(baseDir / "docs" / "API_INVENTORY.md", "# API\n")
+      writeFile(baseDir / "docs" / "COMPATIBILITY_POLICY.md", "# Policy\n")
+      writeFile(baseDir / "docs" / "COMPATIBILITY_MATRIX.md", "# Matrix\n")
+      writeFile(baseDir / "docs" / "LTS_POLICY.md", "# LTS\n")
+      writeFile(baseDir / "docs" / "MIGRATION_GUIDE.md", "# Migration\n")
+      writeFile(baseDir / ".github" / "workflows" / "release.yml", "name: Release\n")
+
+      let bundleDir = prepareReleaseArtifacts("v0.3.0", baseDir)
+      check dirExists(bundleDir)
+      check fileExists(bundleDir / "release_manifest.txt")
+      check dirExists(baseDir / "dist" / "release-0.3.0")
+    finally:
+      removeDirIfExists(baseDir)
+
   test "release preparation rejects non semver versions":
     expect(ValueError):
       discard prepareReleaseArtifacts("v0.3", getCurrentDir())
+
+  test "release preparation rejects invalid semver variants":
+    expect(ValueError):
+      discard prepareReleaseArtifacts("01.2.3", getCurrentDir())
+    expect(ValueError):
+      discard prepareReleaseArtifacts("1.2.x", getCurrentDir())
+    expect(ValueError):
+      discard prepareReleaseArtifacts("1.2.3.4", getCurrentDir())
