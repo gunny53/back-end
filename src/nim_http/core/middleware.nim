@@ -3,6 +3,8 @@
 
 import asyncdispatch, asynchttpserver, tables, times, strutils, algorithm, sequtils
 
+const maxPathCacheEntries = 256
+
 type
   NextFunction* = proc(): Future[void] {.gcsafe, closure.}
   
@@ -61,6 +63,7 @@ proc compilePipelinePlans*(consumer: MiddlewareConsumer) =
     plans.add(PipelinePlan(prefix: prefix, chain: consumer.routes[prefix]))
 
   consumer.compiledPlans = plans
+  consumer.pathCache.clear()
   consumer.needsRecompile = false
 
 proc resolvePlan(consumer: MiddlewareConsumer, path: string): seq[MiddlewareFunction] =
@@ -72,6 +75,8 @@ proc resolvePlan(consumer: MiddlewareConsumer, path: string): seq[MiddlewareFunc
     if plan.prefix.len == 0 or path.startsWith(plan.prefix):
       chain.add(plan.chain)
 
+  if consumer.pathCache.len >= maxPathCacheEntries:
+    consumer.pathCache.clear()
   consumer.pathCache[path] = chain
   chain
 
