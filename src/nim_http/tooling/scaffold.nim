@@ -524,6 +524,9 @@ proc modularMonolithStarterFiles(identity: ProjectIdentity): seq[ScaffoldFile] =
   ## Phase D starter for a modular monolith.
   ## Keep it close to the REST starter because that already wires a feature
   ## module + health module under a single application module boundary.
+  ## The alias is intentional: it gives the CLI a stable Phase D starter name
+  ## today while leaving room for a richer modular-monolith template later
+  ## without changing the public command surface.
   restStarterFiles(identity)
 
 proc createStarterProject*(starter: string; destination: string) =
@@ -643,6 +646,8 @@ proc prepareReleaseArtifacts*(version: string; root: string = getCurrentDir()): 
   ## `dist/release-<version>`. The command is intentionally file-system only:
   ## CI can archive or publish this staged bundle without re-implementing the
   ## project-specific release checklist.
+  ##
+  ## Returns the absolute path to the staged release bundle directory.
   let normalizedVersion = normalizeSemVer(version)
 
   let requiredFiles = @[
