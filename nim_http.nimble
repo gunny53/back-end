@@ -6,7 +6,7 @@ description   = "Web framework for Nim with Phase D CLI tooling"
 license       = "MIT"
 srcDir        = "src"
 installExt    = @["nim"]
-bin           = @["nimhttp"]
+bin           = @["nimax", "nimhttp"]
 
 
 # Dependencies

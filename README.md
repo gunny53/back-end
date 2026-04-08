@@ -1,4 +1,4 @@
-# NimHTTP Framework
+# Nimax Framework
 
 A high-performance, async web framework for Nim inspired by NestJS and Spring Boot.
 
@@ -42,26 +42,28 @@ nimble install
 docker-compose up --build
 
 # Or build Docker image manually
-docker build -t nimhttp .
-docker run -p 8888:8888 nimhttp
+docker build -t nimax .
+docker run -p 8888:8888 nimax
 ```
 
 ### CLI Quick Start
 
 ```bash
 # Generate a starter project
-nimhttp new rest-api ./examples/rest-api-starter
-nimhttp new modular-monolith ./examples/modular-monolith-starter
+nimax new rest-api ./examples/rest-api-starter
+nimax new modular-monolith ./examples/modular-monolith-starter
 
 # Generate application code inside an existing repo
-nimhttp generate module Billing .
-nimhttp generate resource UserProfile .
+nimax generate module Billing .
+nimax generate resource UserProfile .
 
 # Run the standard project commands
-nimhttp test
-nimhttp bench
-nimhttp release 0.3.0
+nimax test
+nimax bench
+nimax release 0.3.0
 ```
+
+Compatibility alias: `nimhttp` vẫn hoạt động trong giai đoạn chuyển đổi tên CLI sang `nimax`.
 
 ## Project Structure
 
