@@ -58,7 +58,8 @@ proc process*(request: Request): Future[void] {.async, gcsafe.} =
     let route = current.methods[request.reqMethod]
     if route.pattern.paramSegments.len != paramValues.len:
       raise INTERNAL_SERVER_ERROR("Route parameter count mismatch for path: " &
-        request.url.path)
+        request.url.path & " (expected " & $route.pattern.paramSegments.len &
+        ", got " & $paramValues.len & ")")
     for idx, name in route.pattern.paramSegments:
       params[name] = paramValues[idx]
     route.delegate.instance.params = params
