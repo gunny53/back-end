@@ -57,7 +57,7 @@ proc process*(request: Request): Future[void] {.async, gcsafe.} =
   if current.methods.hasKey(request.reqMethod):
     let route = current.methods[request.reqMethod]
     if route.pattern.paramSegments.len != paramValues.len:
-      raise NOT_FOUND("No route found for path: " & request.url.path)
+      raise NOT_FOUND("Route parameter count mismatch for path: " & request.url.path)
     for idx, name in route.pattern.paramSegments:
       params[name] = paramValues[idx]
     route.delegate.instance.params = params
