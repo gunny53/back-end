@@ -13,10 +13,16 @@ type RouteNode = ref object
 var routeRoot* {.threadvar.}: RouteNode
 routeRoot = RouteNode(children: newTable[string, RouteNode](), methods: newTable[HttpMethod, RouteDetail]())
 
+proc splitPathSegments(path: string): seq[string] =
+  let trimmed = path.strip(chars = {'/'})
+  if trimmed.len == 0:
+    return @[]
+  trimmed.split("/")
+
 proc addRoute*(path: string, met: HttpMethod, delegate: ControllerDelegate) =
   let pattern  = parseRoutePattern(path)
   var current  = routeRoot
-  let segments = path.strip(chars = {'/'}).split("/")
+  let segments = splitPathSegments(path)
   for seg in segments:
     if seg.startsWith(":"):
       if current.paramChild.isNil:
@@ -36,7 +42,7 @@ proc resolve*(this: RouteDetail, request: Request): Future[void] {.async, gcsafe
   await this.delegate.instance.processRequest(request).invoke(this.delegate.handler)
 
 proc process*(request: Request): Future[void] {.async, gcsafe.} =
-  let segments = request.url.path.strip(chars = {'/'}).split("/")
+  let segments = splitPathSegments(request.url.path)
   var current = routeRoot
   var params = newTable[string, string]()
   var paramValues: seq[string] = @[]
@@ -50,9 +56,10 @@ proc process*(request: Request): Future[void] {.async, gcsafe.} =
       raise NOT_FOUND("No route found for path: " & request.url.path)
   if current.methods.hasKey(request.reqMethod):
     let route = current.methods[request.reqMethod]
+    if route.pattern.paramSegments.len != paramValues.len:
+      raise NOT_FOUND("No route found for path: " & request.url.path)
     for idx, name in route.pattern.paramSegments:
-      if idx < paramValues.len:
-        params[name] = paramValues[idx]
+      params[name] = paramValues[idx]
     route.delegate.instance.params = params
     await route.resolve(request)
   else:
