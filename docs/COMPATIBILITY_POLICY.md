@@ -22,6 +22,8 @@ The older `nim_http/core/*` modules remain compatibility shims during the migrat
 - Module names and exported runtime contracts on the public surface are the compatibility boundary.
 - Health probe endpoints and module-graph validation behavior are considered production-facing features.
 - Generated starter projects may evolve, but breaking CLI flag changes must be documented in the changelog.
+- Supported runtime / surface combinations are tracked in `docs/COMPATIBILITY_MATRIX.md`.
+- Long-term support expectations are defined in `docs/LTS_POLICY.md`.
 
 ## Migration expectations
 

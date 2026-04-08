@@ -263,9 +263,17 @@ Delegates entirely to `asynchttpserver.Request`. No NimHTTP-specific symbols at 
 | Symbol | Kind | Tier | Notes |
 |--------|------|------|-------|
 | `usageText` | const | experimental | |
+| `toPascalCase` | proc | experimental | |
 | `toCamelCase` | proc | experimental | |
+| `toSnakeCase` | proc | experimental | |
+| `toKebabCase` | proc | experimental | |
 | `createStarterProject` | proc | experimental | |
+| `generateModule` | proc | experimental | |
 | `generateResource` | proc | experimental | |
+| `runTests` | proc | experimental | |
+| `runBenchmarks` | proc | experimental | |
+| `prepareReleaseArtifacts` | proc | experimental | Stages a release bundle under `dist/release-<version>` |
+| `runRelease` | proc | experimental | CLI implementation for `nimhttp release` |
 | `runCli` | proc | experimental | Entry point for the `nimhttp` binary |
 
 ---

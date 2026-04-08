@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'SemVer version to bundle (for example 0.3.0)'
+        required: true
+        type: string
+
+jobs:
+  release:
+    name: Build release bundle
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Nim
+        uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: '2.2.2'
+
+      - name: Install dependencies
+        run: nimble install -y
+
+      - name: Run tests
+        run: nimble test
+
+      - name: Build release bundle
+        env:
+          RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
+        run: |
+          VERSION="${RELEASE_VERSION#v}"
+          nim c -r --hints:off src/nimhttp.nim -- release "$VERSION" .
+          tar -czf "dist/nimhttp-${VERSION}.tar.gz" -C dist "release-${VERSION}"
+          sha256sum "dist/nimhttp-${VERSION}.tar.gz" > "dist/nimhttp-${VERSION}.tar.gz.sha256"
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nimhttp-release-${{ inputs.version || github.ref_name }}
+          path: |
+            dist/release-*
+            dist/*.tar.gz
+            dist/*.sha256
+          retention-days: 90
