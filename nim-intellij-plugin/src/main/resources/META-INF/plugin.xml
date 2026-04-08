@@ -1,0 +1,88 @@
+<idea-plugin>
+    <id>com.nimhttp.ide</id>
+    <name>Nim Language Support</name>
+    <vendor email="team@nimhttp.dev" url="https://github.com/gunny53/back-end">NimHTTP Team</vendor>
+
+    <description><![CDATA[
+        <b>Nim Language Support</b> for JetBrains IDEs.<br/>
+        <br/>
+        Phase 0 – Syntax highlighting and file type recognition for <code>.nim</code> files.<br/>
+        <ul>
+            <li>Syntax highlighting (keywords, strings, numbers, comments, pragmas)</li>
+            <li>File type association for <code>.nim</code> and <code>.nims</code></li>
+            <li>PSI skeleton (top-level declarations: proc, func, type, import, …)</li>
+        </ul>
+        <br/>
+        <em>Navigation, completion, and NimHTTP framework support are planned for later phases.</em>
+    ]]></description>
+
+    <change-notes><![CDATA[
+        <b>0.1.0-alpha</b>
+        <ul>
+            <li>Initial Phase 0 release: lexer, parser skeleton, syntax highlighter.</li>
+        </ul>
+    ]]></change-notes>
+
+    <idea-version since-build="243" until-build="253.*"/>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+
+        <!-- ------------------------------------------------------------------ -->
+        <!-- File type                                                            -->
+        <!-- ------------------------------------------------------------------ -->
+        <fileType
+            name="Nim"
+            implementationClass="com.nimhttp.ide.NimFileType"
+            fieldName="INSTANCE"
+            language="Nim"
+            extensions="nim;nims"/>
+
+        <!-- ------------------------------------------------------------------ -->
+        <!-- Parser / PSI                                                         -->
+        <!-- ------------------------------------------------------------------ -->
+        <lang.parserDefinition
+            language="Nim"
+            implementationClass="com.nimhttp.ide.parser.NimParserDefinition"/>
+
+        <!-- ------------------------------------------------------------------ -->
+        <!-- Syntax highlighting                                                  -->
+        <!-- ------------------------------------------------------------------ -->
+        <lang.syntaxHighlighterFactory
+            language="Nim"
+            implementationClass="com.nimhttp.ide.highlight.NimSyntaxHighlighterFactory"/>
+
+        <!-- ------------------------------------------------------------------ -->
+        <!-- Color scheme                                                         -->
+        <!-- ------------------------------------------------------------------ -->
+        <colorSettingsPage
+            implementation="com.nimhttp.ide.highlight.NimColorSettingsPage"/>
+
+        <!-- ------------------------------------------------------------------ -->
+        <!-- Commenter                                                            -->
+        <!-- ------------------------------------------------------------------ -->
+        <lang.commenter
+            language="Nim"
+            implementationClass="com.nimhttp.ide.NimCommenter"/>
+
+        <!-- ------------------------------------------------------------------ -->
+        <!-- Bracket matching                                                     -->
+        <!-- ------------------------------------------------------------------ -->
+        <lang.bracketMatcher
+            language="Nim"
+            implementationClass="com.nimhttp.ide.NimBracketMatcher"/>
+
+    </extensions>
+
+    <!-- ------------------------------------------------------------------ -->
+    <!-- Framework Adapter extension point (Phase 3)                         -->
+    <!-- ------------------------------------------------------------------ -->
+    <extensionPoints>
+        <extensionPoint
+            name="nimFrameworkAdapter"
+            interface="com.nimhttp.ide.framework.NimFrameworkAdapter"
+            dynamic="true"/>
+    </extensionPoints>
+
+</idea-plugin>
