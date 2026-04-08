@@ -6,6 +6,22 @@ proc removeDirIfExists(path: string) =
   if dirExists(path):
     removeDir(path)
 
+proc createReleaseTestFixture(baseDir: string) =
+  createDir(baseDir)
+  createDir(baseDir / "docs")
+  createDir(baseDir / ".github")
+  createDir(baseDir / ".github" / "workflows")
+
+  writeFile(baseDir / "README.md", "# Demo\n")
+  writeFile(baseDir / "CHANGELOG.md", "# Changelog\n")
+  writeFile(baseDir / "nim_http.nimble", "version = \"0.1.0\"\n")
+  writeFile(baseDir / "docs" / "API_INVENTORY.md", "# API\n")
+  writeFile(baseDir / "docs" / "COMPATIBILITY_POLICY.md", "# Policy\n")
+  writeFile(baseDir / "docs" / "COMPATIBILITY_MATRIX.md", "# Matrix\n")
+  writeFile(baseDir / "docs" / "LTS_POLICY.md", "# LTS\n")
+  writeFile(baseDir / "docs" / "MIGRATION_GUIDE.md", "# Migration\n")
+  writeFile(baseDir / ".github" / "workflows" / "release.yml", "name: Release\n")
+
 suite "phase d scaffolding":
   test "camel case helper normalizes identifier names":
     check toCamelCase("user profile") == "userProfile"
@@ -57,20 +73,7 @@ suite "phase d scaffolding":
     let baseDir = getCurrentDir() / ".tmp-release-bundle"
     removeDirIfExists(baseDir)
     try:
-      createDir(baseDir)
-      createDir(baseDir / "docs")
-      createDir(baseDir / ".github")
-      createDir(baseDir / ".github" / "workflows")
-
-      writeFile(baseDir / "README.md", "# Demo\n")
-      writeFile(baseDir / "CHANGELOG.md", "# Changelog\n")
-      writeFile(baseDir / "nim_http.nimble", "version = \"0.1.0\"\n")
-      writeFile(baseDir / "docs" / "API_INVENTORY.md", "# API\n")
-      writeFile(baseDir / "docs" / "COMPATIBILITY_POLICY.md", "# Policy\n")
-      writeFile(baseDir / "docs" / "COMPATIBILITY_MATRIX.md", "# Matrix\n")
-      writeFile(baseDir / "docs" / "LTS_POLICY.md", "# LTS\n")
-      writeFile(baseDir / "docs" / "MIGRATION_GUIDE.md", "# Migration\n")
-      writeFile(baseDir / ".github" / "workflows" / "release.yml", "name: Release\n")
+      createReleaseTestFixture(baseDir)
 
       let bundleDir = prepareReleaseArtifacts("0.3.0", baseDir)
       let manifest = readFile(bundleDir / "release_manifest.txt")
@@ -88,20 +91,7 @@ suite "phase d scaffolding":
     let baseDir = getCurrentDir() / ".tmp-release-bundle-vprefix"
     removeDirIfExists(baseDir)
     try:
-      createDir(baseDir)
-      createDir(baseDir / "docs")
-      createDir(baseDir / ".github")
-      createDir(baseDir / ".github" / "workflows")
-
-      writeFile(baseDir / "README.md", "# Demo\n")
-      writeFile(baseDir / "CHANGELOG.md", "# Changelog\n")
-      writeFile(baseDir / "nim_http.nimble", "version = \"0.1.0\"\n")
-      writeFile(baseDir / "docs" / "API_INVENTORY.md", "# API\n")
-      writeFile(baseDir / "docs" / "COMPATIBILITY_POLICY.md", "# Policy\n")
-      writeFile(baseDir / "docs" / "COMPATIBILITY_MATRIX.md", "# Matrix\n")
-      writeFile(baseDir / "docs" / "LTS_POLICY.md", "# LTS\n")
-      writeFile(baseDir / "docs" / "MIGRATION_GUIDE.md", "# Migration\n")
-      writeFile(baseDir / ".github" / "workflows" / "release.yml", "name: Release\n")
+      createReleaseTestFixture(baseDir)
 
       let bundleDir = prepareReleaseArtifacts("v0.3.0", baseDir)
       let manifest = readFile(bundleDir / "release_manifest.txt")
