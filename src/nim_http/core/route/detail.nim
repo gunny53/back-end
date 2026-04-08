@@ -13,10 +13,16 @@ type RouteNode = ref object
 var routeRoot* {.threadvar.}: RouteNode
 routeRoot = RouteNode(children: newTable[string, RouteNode](), methods: newTable[HttpMethod, RouteDetail]())
 
+proc splitPathSegments(path: string): seq[string] =
+  let trimmed = path.strip(chars = {'/'})
+  if trimmed.len == 0:
+    return @[]
+  trimmed.split("/")
+
 proc addRoute*(path: string, met: HttpMethod, delegate: ControllerDelegate) =
   let pattern  = parseRoutePattern(path)
   var current  = routeRoot
-  let segments = path.strip(chars = {'/'}).split("/")
+  let segments = splitPathSegments(path)
   for seg in segments:
     if seg.startsWith(":"):
       if current.paramChild.isNil:
@@ -36,22 +42,24 @@ proc resolve*(this: RouteDetail, request: Request): Future[void] {.async, gcsafe
   await this.delegate.instance.processRequest(request).invoke(this.delegate.handler)
 
 proc process*(request: Request): Future[void] {.async, gcsafe.} =
-  let segments   = request.url.path.strip(chars = {'/'}).split("/")
-  var current    = routeRoot
-  var params     = newTable[string, string]()
-  var paramIndex = 0
+  let segments = splitPathSegments(request.url.path)
+  var current = routeRoot
+  var params = newTable[string, string]()
+  var paramValues: seq[string] = @[]
   for seg in segments:
     if current.children.hasKey(seg):
       current = current.children[seg]
     elif not current.paramChild.isNil:
       current = current.paramChild
-      if paramIndex < current.methods.getOrDefault(request.reqMethod).pattern.paramSegments.len:
-        params[current.methods[request.reqMethod].pattern.paramSegments[paramIndex]] = seg
-        paramIndex += 1
+      paramValues.add(seg)
     else:
       raise NOT_FOUND("No route found for path: " & request.url.path)
   if current.methods.hasKey(request.reqMethod):
     let route = current.methods[request.reqMethod]
+    if route.pattern.paramSegments.len != paramValues.len:
+      raise NOT_FOUND("Route parameter count mismatch for path: " & request.url.path)
+    for idx, name in route.pattern.paramSegments:
+      params[name] = paramValues[idx]
     route.delegate.instance.params = params
     await route.resolve(request)
   else:

@@ -93,6 +93,7 @@ proc start*(this: NimHttpApplication) =
   # Initialize middleware if not provided
   if this.settings.middleware.isNil:
     this.settings.middleware = getMiddlewareConsumer()
+  this.settings.middleware.compilePipelinePlans()
   
   # Create and store server instance for lifecycle management
   this.server = newAsyncHttpServer()
