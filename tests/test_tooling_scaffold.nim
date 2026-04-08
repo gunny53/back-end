@@ -40,7 +40,7 @@ suite "phase d scaffolding":
     finally:
       removeDirIfExists(baseDir)
 
-  test "modular monolith starter is supported":
+  test "modular-monolith starter is supported":
     let baseDir = getCurrentDir() / "tmp_modular_monolith_starter"
     removeDirIfExists(baseDir)
     try:
