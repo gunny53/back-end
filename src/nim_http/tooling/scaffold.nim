@@ -609,15 +609,15 @@ proc normalizeSemVer(version: string): string =
 
   let parts = candidate.split('.')
   if parts.len != 3:
-    raise newException(ValueError, "Version must use semver format x.y.z")
+    raise newException(ValueError, "Version must have exactly 3 numeric parts separated by dots")
   for part in parts:
     if part.len == 0:
-      raise newException(ValueError, "Version must use semver format x.y.z")
+      raise newException(ValueError, "Version parts cannot be empty")
     if part.len > 1 and part[0] == '0':
       raise newException(ValueError, "Semver parts must not contain leading zeroes")
     for ch in part:
       if ch notin {'0' .. '9'}:
-        raise newException(ValueError, "Version must use semver format x.y.z")
+        raise newException(ValueError, "Version parts must contain only digits")
   candidate
 
 proc requireExistingPaths(root: string; relativePaths: openArray[string]) =

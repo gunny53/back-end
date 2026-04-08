@@ -41,7 +41,7 @@ suite "phase d scaffolding":
       removeDirIfExists(baseDir)
 
   test "modular monolith starter is supported":
-    let baseDir = getCurrentDir() / ".tmp-modular-monolith-starter"
+    let baseDir = getCurrentDir() / ".tmp_modular_monolith_starter"
     removeDirIfExists(baseDir)
     try:
       createStarterProject("modular-monolith", baseDir)
