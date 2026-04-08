@@ -1,0 +1,94 @@
+name: Benchmark
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  benchmarks:
+    name: Run benchmark suite
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Nim
+        uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: '2.2.2'
+
+      - name: Install dependencies
+        run: nimble install -y
+
+      - name: Run module-graph benchmark
+        id: bench_module_graph
+        run: nim c -r -d:release --hints:off benchmarks/bench.nim | tee bench_module_graph.txt
+
+      - name: Run routing benchmark
+        id: bench_routing
+        run: nim c -r -d:release --hints:off benchmarks/bench_routing.nim | tee bench_routing.txt
+
+      - name: Run pipeline benchmark
+        id: bench_pipeline
+        run: nim c -r -d:release --hints:off benchmarks/bench_pipeline.nim | tee bench_pipeline.txt
+
+      - name: Run DI benchmark
+        id: bench_di
+        run: nim c -r -d:release --hints:off benchmarks/bench_di.nim | tee bench_di.txt
+
+      - name: Run hello/JSON benchmark
+        id: bench_hello
+        run: nim c -r -d:release --hints:off benchmarks/bench_hello.nim | tee bench_hello.txt
+
+      - name: Combine results
+        run: |
+          echo "## Benchmark Results" > benchmark_summary.md
+          echo "" >> benchmark_summary.md
+          echo "### Module graph" >> benchmark_summary.md
+          echo '```' >> benchmark_summary.md
+          cat bench_module_graph.txt >> benchmark_summary.md
+          echo '```' >> benchmark_summary.md
+          echo "" >> benchmark_summary.md
+          echo "### Routing" >> benchmark_summary.md
+          echo '```' >> benchmark_summary.md
+          cat bench_routing.txt >> benchmark_summary.md
+          echo '```' >> benchmark_summary.md
+          echo "" >> benchmark_summary.md
+          echo "### Pipeline" >> benchmark_summary.md
+          echo '```' >> benchmark_summary.md
+          cat bench_pipeline.txt >> benchmark_summary.md
+          echo '```' >> benchmark_summary.md
+          echo "" >> benchmark_summary.md
+          echo "### DI" >> benchmark_summary.md
+          echo '```' >> benchmark_summary.md
+          cat bench_di.txt >> benchmark_summary.md
+          echo '```' >> benchmark_summary.md
+          echo "" >> benchmark_summary.md
+          echo "### Hello / JSON" >> benchmark_summary.md
+          echo '```' >> benchmark_summary.md
+          cat bench_hello.txt >> benchmark_summary.md
+          echo '```' >> benchmark_summary.md
+
+      - name: Upload benchmark artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: |
+            bench_module_graph.txt
+            bench_routing.txt
+            bench_pipeline.txt
+            bench_di.txt
+            bench_hello.txt
+            benchmark_summary.md
+          retention-days: 90
+
+      - name: Post benchmark summary to PR
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          path: benchmark_summary.md

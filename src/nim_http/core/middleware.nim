@@ -89,7 +89,11 @@ proc cachePlan(
   consumer.pathCache[path] = chain
   consumer.pathCacheOrder.add(path)
 
-proc resolvePlan(consumer: MiddlewareConsumer, path: string): seq[MiddlewareFunction] =
+proc resolvePlan*(consumer: MiddlewareConsumer, path: string): seq[MiddlewareFunction] =
+  ## Returns the compiled middleware chain for the given request path.
+  ## Hits the LRU path cache on repeated calls; results are stable between
+  ## `compilePipelinePlans` invocations and are used as the Phase A benchmark
+  ## baseline for the hot-path resolution cost.
   if consumer.pathCache.hasKey(path):
     consumer.touchPathCache(path)
     return consumer.pathCache[path]
