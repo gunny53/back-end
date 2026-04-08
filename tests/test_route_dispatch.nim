@@ -28,21 +28,21 @@ suite "phase c dispatch: newRouteDispatcher":
 # ---------------------------------------------------------------------------
 
 suite "phase c dispatch: register":
-  test "registering one route makes dispatcher built":
+  test "registering one route increases route count":
     let d = newRouteDispatcher()
     let entry = makeRouteIREntry("GET", "/ping")
     d.register(entry, nil)
     check d.isBuilt()
     check d.routeCount() == 1
 
-  test "registering the same key twice overwrites the entry":
+  test "registering same-shape routes accumulates in bucket":
     let d = newRouteDispatcher()
     let e1 = makeRouteIREntry("GET", "/ping")
     let e2 = makeRouteIREntry("GET", "/pong")
-    # Both share the same key shape (cnt=1, mask=1) — last write wins
+    # Both share the same (method, segmentCount) key — both are kept in the bucket
     d.register(e1, nil)
     d.register(e2, nil)
-    check d.routeCount() == 1
+    check d.routeCount() == 2
 
   test "routes with distinct keys are both kept":
     let d = newRouteDispatcher()

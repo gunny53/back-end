@@ -1,8 +1,15 @@
 ## Generated Dispatcher — Phase C of the NIMAX refactor roadmap.
 ##
-## Replaces the per-request trie traversal (``for seg in segments``) with
-## a flat ``Table[RouteKey, DispatchEntry]`` lookup that is O(1) on
-## ``(method, segmentCount, staticMask)``.
+## Replaces the per-request trie traversal (``for seg in segments``) with a
+## two-level dispatch table:
+##
+##   Level 1: O(1) probe on ``(httpMethod, segmentCount)``
+##   Level 2: linear scan of the (typically tiny) bucket to verify static
+##             segment values and select the matching route template.
+##
+## This eliminates the O(depth) trie walk and the per-request ``for seg in
+## segments`` loop in the common case where each ``(method, count)`` bucket
+## contains exactly one entry.
 ##
 ## Usage::
 ##
@@ -30,24 +37,41 @@ type
     detail*:   RouteDetail   ## runtime handler (nil when not yet resolved)
 
 # ---------------------------------------------------------------------------
+# Two-level dispatch key
+# ---------------------------------------------------------------------------
+
+type
+  DispatchKey = tuple
+    ## First-level lookup key: method string + segment count.
+    ## Within a bucket all entries share the same shape; static-segment
+    ## verification happens inside the bucket scan (usually 1 entry).
+    httpMethod:   string
+    segmentCount: int
+
+# ---------------------------------------------------------------------------
 # Dispatcher
 # ---------------------------------------------------------------------------
 
 type
   RouteDispatcher* = ref object
-    ## Flat dispatch table built once at application startup.
-    ## Hot-path lookup is a single ``Table`` probe followed by O(k) static
-    ## segment verification, where k is the number of static segments.
-    table: Table[RouteKey, DispatchEntry]
+    ## Two-level dispatch table built once at application startup.
+    ##
+    ## ``table[(method, segmentCount)]`` returns the bucket of entries that
+    ## share that shape.  For the vast majority of APIs each bucket contains
+    ## exactly one entry, making the overall lookup effectively O(1).
+    table: Table[DispatchKey, seq[DispatchEntry]]
 
 proc newRouteDispatcher*(): RouteDispatcher =
   ## Creates an empty ``RouteDispatcher``.
-  RouteDispatcher(table: initTable[RouteKey, DispatchEntry]())
+  RouteDispatcher(table: initTable[DispatchKey, seq[DispatchEntry]]())
 
 proc register*(d: RouteDispatcher, irEntry: RouteIREntry,
                detail: RouteDetail) =
-  ## Adds one (IR metadata, handler) pair to the dispatcher table.
-  d.table[irEntry.key] = DispatchEntry(irEntry: irEntry, detail: detail)
+  ## Adds one ``(IR metadata, handler)`` pair to the dispatcher table.
+  let dk = (httpMethod: irEntry.key.httpMethod,
+            segmentCount: irEntry.key.segmentCount)
+  d.table.mgetOrPut(dk, @[]).add(
+    DispatchEntry(irEntry: irEntry, detail: detail))
 
 proc buildFrom*(d: RouteDispatcher,
                 manifest: openArray[(string, string)]) =
@@ -58,11 +82,10 @@ proc buildFrom*(d: RouteDispatcher,
   ## Call once at startup **after** all ``Controller`` macro bodies have
   ## executed (i.e. after ``addRoute`` has been called for every route).
   for (meth, path) in manifest:
-    let met = parseEnum[HttpMethod](meth)
+    let met    = parseEnum[HttpMethod](meth)
     let detail = findRouteDetail(path, met)
     if detail != nil:
-      let entry = makeRouteIREntry(meth, path)
-      d.register(entry, detail)
+      d.register(makeRouteIREntry(meth, path), detail)
 
 # ---------------------------------------------------------------------------
 # Slot-based parameter binding
@@ -75,9 +98,8 @@ proc bindParams(entry: DispatchEntry,
   ## position of parameter segments in the original path template — no
   ## dynamic name search is required.
   result = newTable[string, string]()
-  var slot = 0
-  let path  = entry.irEntry.rawPath
-  let trimmed = path.strip(chars = {'/'})
+  var slot   = 0
+  let trimmed = entry.irEntry.rawPath.strip(chars = {'/'})
   if trimmed.len == 0:
     return
   var segIdx = 0
@@ -89,6 +111,24 @@ proc bindParams(entry: DispatchEntry,
     inc segIdx
 
 # ---------------------------------------------------------------------------
+# Static-segment verification helper
+# ---------------------------------------------------------------------------
+
+proc staticSegmentsMatch(entry: DispatchEntry, segs: seq[string]): bool =
+  ## Returns ``true`` when every static segment in *entry*'s template equals
+  ## the corresponding segment in *segs*.
+  let trimmed = entry.irEntry.rawPath.strip(chars = {'/'})
+  if trimmed.len == 0:
+    return segs.len == 0
+  var i = 0
+  for tmplSeg in trimmed.split("/"):
+    if not tmplSeg.startsWith(":"):
+      if i >= segs.len or segs[i] != tmplSeg:
+        return false
+    inc i
+  return true
+
+# ---------------------------------------------------------------------------
 # Hot-path dispatch
 # ---------------------------------------------------------------------------
 
@@ -98,67 +138,48 @@ proc splitPathSegs(path: string): seq[string] =
   else: trimmed.split("/")
 
 proc dispatch*(d: RouteDispatcher, request: Request): Future[void] {.async, gcsafe.} =
-  ## Dispatches *request* using the flat table.
+  ## Dispatches *request* using the two-level table.
   ##
   ## 1. Splits the request path into segments.
-  ## 2. Computes ``(method, segmentCount, staticMask)`` directly — no trie
-  ##    traversal.
-  ## 3. Looks up the entry in the flat table (O(1) probe).
-  ## 4. Verifies static segment values at their fixed positions.
-  ## 5. Binds parameter slots by index.
+  ## 2. Probes the table with ``(method, segmentCount)`` — O(1).
+  ## 3. Scans the (usually single-entry) bucket to verify static segments.
+  ## 4. Binds parameter slots by index and invokes the handler.
   ##
   ## Raises ``NOT_FOUND`` or ``METHOD_NOT_ALLOWED`` on routing failures.
   let meth = $request.reqMethod
   let segs = splitPathSegs(request.url.path)
   let cnt  = segs.len
+  let dk   = (httpMethod: meth, segmentCount: cnt)
 
-  # Compute the static mask from the *actual* request segments so we can
-  # distinguish between static and param positions — note that for a request
-  # URL we cannot know which positions are params without knowing the route.
-  # We therefore iterate over all registered keys that share (method, count)
-  # and check the mask against the actual segment values.
+  if d.table.hasKey(dk):
+    let bucket = d.table[dk]
+    for entry in bucket:
+      if staticSegmentsMatch(entry, segs):
+        let params = bindParams(entry, segs)
+        entry.detail.delegate.instance.params = params
+        await entry.detail.resolve(request)
+        return
+    # The (method, count) exists but no static pattern matched.
+    # This should not normally occur for well-formed route sets; treat
+    # as NOT_FOUND rather than METHOD_NOT_ALLOWED.
+    raise NOT_FOUND("No route found for path: " & request.url.path)
 
-  var matched = false
-  for key, entry in d.table:
-    if key.httpMethod != meth or key.segmentCount != cnt:
-      continue
-
-    # Verify static segments at their bit positions
-    let tmplPath = entry.irEntry.rawPath
-    let trimmed  = tmplPath.strip(chars = {'/'})
-    let tmplSegs = if trimmed.len == 0: newSeq[string]()
-                   else: trimmed.split("/")
-    var ok = true
-    for i, tmplSeg in tmplSegs:
-      if not tmplSeg.startsWith(":"):
-        if i >= segs.len or segs[i] != tmplSeg:
-          ok = false
-          break
-    if not ok:
-      continue
-
-    # Route matched — bind params by slot
-    matched = true
-    let params = bindParams(entry, segs)
-    entry.detail.delegate.instance.params = params
-    await entry.detail.resolve(request)
-    return
-
-  if not matched:
-    # Try to distinguish 404 vs 405 for a better error message
-    var pathFound = false
-    for key, _ in d.table:
-      if key.segmentCount == cnt:
-        pathFound = true
-        break
-    if pathFound:
-      raise METHOD_NOT_ALLOWED("Method " & meth & " not allowed for path: " &
-                                request.url.path)
-    else:
-      raise NOT_FOUND("No route found for path: " & request.url.path)
+  # No bucket for this (method, count).  Check whether the path shape
+  # is registered under a *different* method to distinguish 404 from 405.
+  for key, _ in d.table:
+    if key.segmentCount == cnt:
+      # There is at least one route with this segment count but for a
+      # different method. Check if the static segments actually match.
+      let anyBucket = d.table[key]
+      for entry in anyBucket:
+        if staticSegmentsMatch(entry, segs):
+          raise METHOD_NOT_ALLOWED("Method " & meth &
+                                   " not allowed for path: " &
+                                   request.url.path)
+  raise NOT_FOUND("No route found for path: " & request.url.path)
 
 # ---------------------------------------------------------------------------
-# Facade export
+# Introspection helpers
 # ---------------------------------------------------------------------------
 
 proc isBuilt*(d: RouteDispatcher): bool =
@@ -166,5 +187,8 @@ proc isBuilt*(d: RouteDispatcher): bool =
   d.table.len > 0
 
 proc routeCount*(d: RouteDispatcher): int =
-  ## Returns the number of routes currently registered in the dispatcher.
-  d.table.len
+  ## Returns the total number of routes currently registered across all
+  ## ``(method, segmentCount)`` buckets.
+  for _, bucket in d.table:
+    result += bucket.len
+
