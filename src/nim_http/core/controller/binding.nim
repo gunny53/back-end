@@ -5,17 +5,20 @@ func parseParamStmt*(
   identNameStr: string,
   identType:    NimNode
 ): NimNode =
+  ## Phase D: uses ``this.getParam(name)`` for slot-based lookup instead of
+  ## the direct ``this.params[name]`` table access.  This keeps the hot path
+  ## allocation-free when the Phase-D dispatcher has populated ``paramSlots``.
   let identTypeStr = $identType
   let body         = newStmtList()
   case identTypeStr
   of $int, $int32, $int64:
-    body.add quote do: parseInt(this.params[`identNameStr`])
+    body.add quote do: parseInt(this.getParam(`identNameStr`))
   of $float, $float32, $float64:
-    body.add quote do: parseFloat(this.params[`identNameStr`])
+    body.add quote do: parseFloat(this.getParam(`identNameStr`))
   of $bool:
-    body.add quote do: parseBool(this.params[`identNameStr`])
+    body.add quote do: parseBool(this.getParam(`identNameStr`))
   else:
-    body.add quote do: this.params[`identNameStr`]
+    body.add quote do: this.getParam(`identNameStr`)
   result = quote do:
     let `identName` = try: `body` 
     except Exception as e:

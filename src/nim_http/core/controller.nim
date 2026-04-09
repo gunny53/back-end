@@ -1,10 +1,12 @@
 import macros, asynchttpserver, macrocache, tables, sequtils, strutils, json
 import route
+import route/ir as routeIR
 import controller/base as base
 import controller/binding
 from di import inject
 export base
 export inject
+export routeIR
 
 # Constants
 const ROUTE_METHOD_ATTRIBUTE = HttpMethod.toSeq().mapIt($(it))
@@ -117,6 +119,8 @@ macro Controller*(classT, body: untyped): untyped =
               let splatOrEmpty = if routePrefix.endsWith("/") or rawPath.startsWith("/"): "" else: "/"
               let path         = routePrefix & splatOrEmpty & rawPath
               let httpMethod   = $identKey
+              # Phase B: record route in compile-time IR cache
+              routeIRCache.add(newLit((httpMethod, path)))
               outbody.add(
                 quote do: RouteRegister(path: `path`, delegate: collect(`class`, `procName`)).reg(`httpMethod`)
               )
@@ -129,6 +133,9 @@ macro Controller*(classT, body: untyped): untyped =
             let identKey = attr[0]
             if $identKey in ROUTE_METHOD_ATTRIBUTE:
               let httpMethod  = $identKey
+              let path        = routePrefix
+              # Phase B: record route in compile-time IR cache
+              routeIRCache.add(newLit((httpMethod, path)))
               outBody.add(
                 quote do: RouteRegister(path: `routePrefix`, delegate: collect(`class`, `procName`)).reg(`httpMethod`)
               )
