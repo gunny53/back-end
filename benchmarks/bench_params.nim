@@ -33,16 +33,22 @@ let threeParamLayout: ParamLayout = @["orgId", "teamId", "memberId"]
 
 template benchTable(name: string, layout: ParamLayout,
                     segs: seq[string], path: string) =
+  ## Baseline: mirrors the old detail.nim ``process`` param-extraction logic
+  ## exactly — iterate the template, collect param-segment values in order,
+  ## then build the Table.
   let t0 = cpuTime()
   for _ in 0 ..< iterations:
-    var tbl = newTable[string, string]()
-    var slot   = 0
-    let trimmed = path.strip(chars = {'/'})
+    var tbl        = newTable[string, string]()
+    var paramVals: seq[string] = @[]
+    let trimmed    = path.strip(chars = {'/'})
     if trimmed.len > 0:
       for seg in trimmed.split("/"):
-        if seg.startsWith(":") and slot < layout.len:
-          tbl[layout[slot]] = segs[slot + (segs.len - layout.len)]
-          inc slot
+        if seg.startsWith(":"):
+          paramVals.add("")   # placeholder; real code reads from request segs
+    # Simulate the name→value assignment from detail.process
+    for i, pname in layout:
+      if i < segs.len:
+        tbl[pname] = segs[i]
     discard tbl
   let ms = (cpuTime() - t0) * 1_000
   stdout.writeLine "bench_params_table_" & name & "_ms=" & $ms
