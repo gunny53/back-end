@@ -1,15 +1,16 @@
-## Generated Dispatcher — Phase C of the NIMAX refactor roadmap.
+## Generated Dispatcher — Phase C + D of the NIMAX refactor roadmap.
 ##
-## Replaces the per-request trie traversal (``for seg in segments``) with a
-## two-level dispatch table:
-##
+## Phase C: two-level dispatch table replacing the per-request trie traversal.
 ##   Level 1: O(1) probe on ``(httpMethod, segmentCount)``
 ##   Level 2: linear scan of the (typically tiny) bucket to verify static
 ##             segment values and select the matching route template.
 ##
-## This eliminates the O(depth) trie walk and the per-request ``for seg in
-## segments`` loop in the common case where each ``(method, count)`` bucket
-## contains exactly one entry.
+## Phase D: zero-alloc parameter binding.
+##   After matching, the dispatcher writes into ``controller.paramSlots``
+##   (a slot-indexed ``seq[string]``) instead of building a
+##   ``Table[string, string]``.  The ``Table`` is only materialised on demand
+##   when legacy code calls ``this.materializeParams()`` or accesses
+##   ``this.params`` directly.
 ##
 ## Usage::
 ##
@@ -22,6 +23,7 @@
 
 import asynchttpserver, asyncdispatch, tables, strutils
 import ir
+import params
 import detail
 import ../exception
 
@@ -88,27 +90,20 @@ proc buildFrom*(d: RouteDispatcher,
       d.register(makeRouteIREntry(meth, path), detail)
 
 # ---------------------------------------------------------------------------
-# Slot-based parameter binding
+# Phase D: slot-based parameter binding — no Table allocation
 # ---------------------------------------------------------------------------
 
-proc bindParams(entry: DispatchEntry,
-                segs: seq[string]): TableRef[string, string] =
-  ## Binds path parameter values to their names using the fixed slot layout
-  ## recorded in ``irEntry.paramNames``.  Slot index is determined by the
-  ## position of parameter segments in the original path template — no
-  ## dynamic name search is required.
-  result = newTable[string, string]()
-  var slot   = 0
-  let trimmed = entry.irEntry.rawPath.strip(chars = {'/'})
-  if trimmed.len == 0:
-    return
-  var segIdx = 0
-  for seg in trimmed.split("/"):
-    if seg.startsWith(":"):
-      if slot < entry.irEntry.paramNames.len and segIdx < segs.len:
-        result[entry.irEntry.paramNames[slot]] = segs[segIdx]
-      inc slot
-    inc segIdx
+proc bindParamSlots(entry: DispatchEntry,
+                    segs: seq[string]): ParamSlots =
+  ## Binds path parameter values to a ``ParamSlots`` using the fixed slot
+  ## layout from ``irEntry.paramNames``.
+  ##
+  ## Phase D hot-path: only a ``seq[string]`` of values is allocated; no
+  ## ``Table`` is created.  The layout ``seq`` is shared from the IR entry
+  ## and not copied per request.
+  let values = extractSlotValues(entry.irEntry.paramNames, segs,
+                                  entry.irEntry.rawPath)
+  newParamSlots(entry.irEntry.paramNames, values)
 
 # ---------------------------------------------------------------------------
 # Static-segment verification helper
@@ -155,8 +150,8 @@ proc dispatch*(d: RouteDispatcher, request: Request): Future[void] {.async, gcsa
     let bucket = d.table[dk]
     for entry in bucket:
       if staticSegmentsMatch(entry, segs):
-        let params = bindParams(entry, segs)
-        entry.detail.delegate.instance.params = params
+        # Phase D: write slot-based params — no Table allocation
+        entry.detail.delegate.instance.paramSlots = bindParamSlots(entry, segs)
         await entry.detail.resolve(request)
         return
     # The (method, count) exists but no static pattern matched.
